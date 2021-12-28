@@ -5,6 +5,9 @@ authors = ["Orkun Kulce <orkunkl@users.noreply.github.com>", "Terraform Labs, PT
 edition = "2018"
 description = "An Airdrop contract for allowing users to claim rewards with Merkle Tree based proof"
 license = "Apache-2.0"
+repository = "https://github.com/CosmWasm/cw-tokens"
+homepage = "https://cosmwasm.com"
+documentation = "https://docs.cosmwasm.com"
 
 exclude = [
   "contract.wasm",

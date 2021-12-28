@@ -1,5 +1,6 @@
 Atomic-Swap: A CosmWasm atomic swap contract that handles native tokens
-Copyright (C) 2020 Confio OÜ
+Copyright (C) 2020-21 Confio OÜ
+Copyright (C) 2021-22 Confio GmbH
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.

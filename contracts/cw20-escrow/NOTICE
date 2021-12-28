@@ -1,5 +1,7 @@
 CW20-Escrow: A CosmWasm escrow contract that handles native and cw20 tokens
-Copyright (C) 2020 Confio OÜ
+Copyright (C) 2020-21 Confio OÜ
+Copyright (C) 2021-22 Confio GmbH
+
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
