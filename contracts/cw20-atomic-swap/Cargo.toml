@@ -5,6 +5,9 @@ authors = ["Mauro Lacy <maurolacy@users.noreply.github.com>"]
 edition = "2018"
 description = "Implementation of Atomic Swaps"
 license = "Apache-2.0"
+repository = "https://github.com/CosmWasm/cw-tokens"
+homepage = "https://cosmwasm.com"
+documentation = "https://docs.cosmwasm.com"
 
 [lib]
 crate-type = ["cdylib", "rlib"]
