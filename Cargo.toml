@@ -1,0 +1,30 @@
+[workspace]
+members = ["contracts/*"]
+
+[profile.release.package.cw20-atomic-swap]
+codegen-units = 1
+incremental = false
+
+[profile.release.package.cw20-bonding]
+codegen-units = 1
+incremental = false
+
+[profile.release.package.cw20-escrow]
+codegen-units = 1
+incremental = false
+
+[profile.release.package.cw20-merkle-airdrop]
+codegen-units = 1
+incremental = false
+
+[profile.release.package.cw20-staking]
+codegen-units = 1
+incremental = false
+
+[profile.release]
+rpath = false
+lto = true
+overflow-checks = true
+opt-level = 3
+debug = false
+debug-assertions = false
