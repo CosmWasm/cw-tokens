@@ -8,6 +8,7 @@ workflows:
       - contract_cw20_escrow
       - contract_cw20_staking
       - contract_cw20_merkle_airdrop
+      - contract_cw20_streams
       - lint
       - wasm-build
   deploy:
@@ -163,6 +164,33 @@ jobs:
             - /usr/local/cargo/registry
             - target
           key: cargocache-cw20-merkle-airdrop-rust:1.53.0-{{ checksum "~/project/Cargo.lock" }}
+    
+  contract_cw20_streams:
+    docker:
+      - image: rust:1.53.0
+    working_directory: ~/project/contracts/cw20-streams
+    steps:
+      - checkout:
+          path: ~/project
+      - run:
+          name: Version information
+          command: rustc --version; cargo --version; rustup --version
+      - restore_cache:
+          keys:
+            - cargocache-cw20-streams-rust:1.53.0-{{ checksum "~/project/Cargo.lock" }}
+      - run:
+          name: Unit Tests
+          environment:
+            RUST_BACKTRACE: 1
+          command: cargo unit-test --locked
+      - run:
+          name: Build and run schema generator
+          command: cargo schema --locked
+      - save_cache:
+          paths:
+            - /usr/local/cargo/registry
+            - target
+          key: cargocache-cw20-streams-rust:1.53.0-{{ checksum "~/project/Cargo.lock" }}
 
   lint:
     docker:
