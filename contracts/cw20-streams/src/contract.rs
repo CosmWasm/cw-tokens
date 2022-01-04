@@ -98,14 +98,15 @@ pub fn execute_create_stream(
         .u128()
         .checked_rem(duration.u128())
         .ok_or(ContractError::Overflow {})?;
-    let amount = amount.u128() - refund;
 
-    let rate_per_second: Uint128 = amount.checked_div(duration.u128()).unwrap().into();
+    let amount = amount - Uint128::new(refund);
+
+    let rate_per_second = amount / duration;
 
     let stream = Stream {
         owner: owner.clone(),
         recipient: recipient.clone(),
-        amount: amount.into(),
+        amount,
         claimed_amount: Uint128::zero(),
         start_time,
         end_time,
