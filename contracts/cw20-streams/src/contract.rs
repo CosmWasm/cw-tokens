@@ -1,12 +1,12 @@
 use crate::error::ContractError;
 use crate::msg::{
-    ConfigResponse, ExecuteMsg, InstantiateMsg, QueryMsg, ReceiveMsg, StreamResponse,
+    ConfigResponse, ExecuteMsg, InstantiateMsg, QueryMsg, ReceiveMsg, StreamParams, StreamResponse,
 };
 use crate::state::{save_stream, Config, Stream, CONFIG, STREAMS, STREAM_SEQ};
 #[cfg(not(feature = "library"))]
 use cosmwasm_std::entry_point;
 use cosmwasm_std::{
-    from_binary, to_binary, Binary, Deps, DepsMut, Env, MessageInfo, Response, StdResult, Uint128, OverflowError,
+    from_binary, to_binary, Binary, Deps, DepsMut, Env, MessageInfo, Response, StdResult, Uint128,
 };
 use cw2::set_contract_version;
 use cw20::{Cw20Contract, Cw20ExecuteMsg, Cw20ReceiveMsg};
@@ -30,7 +30,7 @@ pub fn instantiate(
 
     let config = Config {
         owner: owner.clone(),
-        cw20_addr: deps.api.addr_validate(msg.cw20_addr.as_str())?,
+        cw20_addr: deps.api.addr_validate(&msg.cw20_addr)?,
     };
     CONFIG.save(deps.storage, &config)?;
 
@@ -51,29 +51,25 @@ pub fn execute(
 ) -> Result<Response, ContractError> {
     match msg {
         ExecuteMsg::Receive(msg) => execute_receive(env, deps, info, msg),
-        ExecuteMsg::Withdraw { id } => try_withdraw(env, deps, info, id),
+        ExecuteMsg::Withdraw { id } => execute_withdraw(env, deps, info, id),
     }
 }
 
-pub fn try_create_stream(
+pub fn execute_create_stream(
     env: Env,
     deps: DepsMut,
     config: Config,
-    owner: String,
-    recipient: String,
-    amount: Uint128,
-    start_time: u64,
-    end_time: u64,
+    params: StreamParams,
 ) -> Result<Response, ContractError> {
-    let validated_owner = deps.api.addr_validate(owner.as_str())?;
-    if validated_owner != owner {
-        return Err(ContractError::InvalidOwner {});
-    }
-
-    let validated_recipient = deps.api.addr_validate(recipient.as_str())?;
-    if validated_recipient != recipient {
-        return Err(ContractError::InvalidRecipient {});
-    }
+    let StreamParams {
+        owner,
+        recipient,
+        amount,
+        start_time,
+        end_time,
+    } = params;
+    let owner = deps.api.addr_validate(&owner)?;
+    let recipient = deps.api.addr_validate(&recipient)?;
 
     if config.owner == recipient {
         return Err(ContractError::InvalidRecipient {});
@@ -88,23 +84,28 @@ pub fn try_create_stream(
         return Err(ContractError::InvalidStartTime {});
     }
 
-    let duration: Uint128 = end_time.checked_sub(start_time).ok_or(ContractError::Overflow {})?.into();
+    let duration: Uint128 = end_time
+        .checked_sub(start_time)
+        .ok_or(ContractError::Overflow {})?
+        .into();
 
     if amount < duration {
         return Err(ContractError::InvalidDuration {});
     }
 
-    let duration_remainder: u128 = amount.u128().checked_rem(duration.u128()).ok_or(ContractError::Overflow {})?.into();
-    if duration_remainder != 0 {
-        return Err(ContractError::InvalidDuration {});
-    }
+    // Duration must divide evenly into amount, so refund remainder
+    let refund: u128 = amount
+        .u128()
+        .checked_rem(duration.u128())
+        .ok_or(ContractError::Overflow {})?;
+    let amount = amount.u128() - refund;
 
-    let rate_per_second: Uint128 = amount.u128().checked_div(duration.u128()).unwrap().into();
+    let rate_per_second: Uint128 = amount.checked_div(duration.u128()).unwrap().into();
 
     let stream = Stream {
-        owner: validated_owner,
-        recipient: validated_recipient,
-        amount,
+        owner: owner.clone(),
+        recipient: recipient.clone(),
+        amount: amount.into(),
         claimed_amount: Uint128::zero(),
         start_time,
         end_time,
@@ -112,14 +113,25 @@ pub fn try_create_stream(
     };
     let id = save_stream(deps, &stream)?;
 
-    Ok(Response::new()
+    let mut response = Response::new()
         .add_attribute("method", "create_stream")
-        .add_attribute("id", id.to_string())
-        .add_attribute("owner", owner)
+        .add_attribute("stream_id", id.to_string())
+        .add_attribute("owner", owner.to_string())
         .add_attribute("recipient", recipient)
-        .add_attribute("amount", amount)
+        .add_attribute("amount", amount.to_string())
         .add_attribute("start_time", start_time.to_string())
-        .add_attribute("end_time", end_time.to_string()))
+        .add_attribute("end_time", end_time.to_string());
+
+    if refund > 0 {
+        let cw20 = Cw20Contract(config.cw20_addr);
+        let msg = cw20.call(Cw20ExecuteMsg::Transfer {
+            recipient: owner.into(),
+            amount: refund.into(),
+        })?;
+
+        response = response.add_message(msg);
+    }
+    Ok(response)
 }
 
 pub fn execute_receive(
@@ -136,33 +148,38 @@ pub fn execute_receive(
     let msg: ReceiveMsg = from_binary(&wrapped.msg)?;
     match msg {
         ReceiveMsg::CreateStream {
-            recipient,
             start_time,
             end_time,
-        } => try_create_stream(
+            recipient,
+        } => execute_create_stream(
             env,
             deps,
             config,
-            wrapped.sender,
-            recipient,
-            wrapped.amount,
-            start_time,
-            end_time,
+            StreamParams {
+                owner: wrapped.sender,
+                recipient,
+                amount: wrapped.amount,
+                start_time,
+                end_time,
+            },
         ),
     }
 }
 
-fn math_error(e: OverflowError) -> ContractError { ContractError::Std(e.into()) }
-
-pub fn try_withdraw(
+pub fn execute_withdraw(
     env: Env,
     deps: DepsMut,
     info: MessageInfo,
     id: u64,
 ) -> Result<Response, ContractError> {
-    let mut stream = STREAMS.load(deps.storage, id)?;
+    let mut stream = STREAMS
+        .may_load(deps.storage, id)?
+        .ok_or(ContractError::StreamNotFound {})?;
+
     if stream.recipient != info.sender {
-        return Err(ContractError::NotStreamRecipient {});
+        return Err(ContractError::NotStreamRecipient {
+            recipient: stream.recipient,
+        });
     }
 
     if stream.claimed_amount >= stream.amount {
@@ -170,22 +187,15 @@ pub fn try_withdraw(
     }
 
     let block_time = env.block.time.seconds();
-    if stream.start_time >= block_time {
-        return Err(ContractError::StreamNotStarted {});
+    let time_passed = std::cmp::min(block_time, stream.end_time).saturating_sub(stream.start_time);
+    let vested = Uint128::from(time_passed) * stream.rate_per_second;
+    let released = vested - stream.claimed_amount;
+
+    if released.u128() == 0 {
+        return Err(ContractError::NoFundsToClaim {});
     }
 
-    let unclaimed_amount = Uint128::from(block_time)
-        .checked_sub(stream.start_time.into())
-        .map_err(math_error)?
-        .checked_mul(stream.rate_per_second)
-        .map_err(math_error)?   
-        .checked_sub(stream.claimed_amount)
-        .map_err(math_error)?;
-    
-    stream.claimed_amount = stream
-        .claimed_amount
-        .checked_add(unclaimed_amount)
-        .map_err(math_error)?;
+    stream.claimed_amount += released;
 
     STREAMS.save(deps.storage, id, &stream)?;
 
@@ -193,13 +203,13 @@ pub fn try_withdraw(
     let cw20 = Cw20Contract(config.cw20_addr);
     let msg = cw20.call(Cw20ExecuteMsg::Transfer {
         recipient: stream.recipient.to_string(),
-        amount: unclaimed_amount.into(),
+        amount: released,
     })?;
 
     let res = Response::new()
-        .add_attribute("method", "try_withdraw")
+        .add_attribute("method", "withdraw")
         .add_attribute("stream_id", id.to_string())
-        .add_attribute("amount", Uint128::from(unclaimed_amount))
+        .add_attribute("amount", released)
         .add_attribute("recipient", stream.recipient.to_string())
         .add_message(msg);
     Ok(res)
@@ -265,19 +275,19 @@ mod tests {
     }
 
     #[test]
-    fn try_withdraw() {
+    fn execute_withdraw() {
         let mut deps = mock_dependencies();
         let msg = InstantiateMsg {
             owner: None,
             cw20_addr: String::from(MOCK_CONTRACT_ADDR),
         };
-        let mut info = mock_info(MOCK_CONTRACT_ADDR, &[]);
+        let info = mock_info(MOCK_CONTRACT_ADDR, &[]);
         instantiate(deps.as_mut(), mock_env(), info.clone(), msg).unwrap();
 
         let sender = Addr::unchecked("Alice").to_string();
         let recipient = Addr::unchecked("Bob").to_string();
         let amount = Uint128::new(200);
-        let mut env = mock_env();
+        let env = mock_env();
         let start_time = env.block.time.plus_seconds(100).seconds();
         let end_time = env.block.time.plus_seconds(300).seconds();
 
@@ -291,7 +301,7 @@ mod tests {
             })
             .unwrap(),
         });
-        execute(deps.as_mut(), env.clone(), info.clone(), msg).unwrap();
+        execute(deps.as_mut(), env.clone(), info, msg).unwrap();
 
         let msg = QueryMsg::GetStream { id: 1 };
         let res = query(deps.as_ref(), mock_env(), msg).unwrap();
@@ -310,7 +320,17 @@ mod tests {
             }
         );
 
+        // Stream has not started
+        let mut info = mock_info(MOCK_CONTRACT_ADDR, &[]);
+        info.sender = Addr::unchecked("Bob");
         let msg = ExecuteMsg::Withdraw { id: 1 };
+        let err = execute(deps.as_mut(), env, info, msg).unwrap_err();
+        assert_eq!(err, ContractError::NoFundsToClaim {});
+
+        // Stream has started so tokens have vested
+        let msg = ExecuteMsg::Withdraw { id: 1 };
+        let mut info = mock_info(MOCK_CONTRACT_ADDR, &[]);
+        let mut env = mock_env();
         info.sender = Addr::unchecked("Bob");
         env.block.time = env.block.time.plus_seconds(150);
         let res = execute(deps.as_mut(), env, info, msg).unwrap();
@@ -339,6 +359,91 @@ mod tests {
                 recipient: Addr::unchecked("Bob"),
                 amount,
                 claimed_amount: Uint128::new(50),
+                start_time,
+                rate_per_second: Uint128::new(1),
+                end_time
+            }
+        );
+
+        // Stream has ended so claim remaining tokens
+
+        let mut env = mock_env();
+        env.block.time = env.block.time.plus_seconds(500);
+        let mut info = mock_info(MOCK_CONTRACT_ADDR, &[]);
+        info.sender = Addr::unchecked("Bob");
+        let msg = ExecuteMsg::Withdraw { id: 1 };
+        let res = execute(deps.as_mut(), env, info, msg).unwrap();
+        let msg = res.messages[0].clone().msg;
+
+        assert_eq!(
+            msg,
+            CosmosMsg::Wasm(WasmMsg::Execute {
+                contract_addr: String::from(MOCK_CONTRACT_ADDR),
+                msg: to_binary(&Cw20ExecuteMsg::Transfer {
+                    recipient: String::from("Bob"),
+                    amount: Uint128::new(150)
+                })
+                .unwrap(),
+                funds: vec![]
+            })
+        );
+    }
+
+    #[test]
+    fn create_stream_with_refund() {
+        let mut deps = mock_dependencies();
+        let msg = InstantiateMsg {
+            owner: None,
+            cw20_addr: String::from(MOCK_CONTRACT_ADDR),
+        };
+        let info = mock_info(MOCK_CONTRACT_ADDR, &[]);
+        instantiate(deps.as_mut(), mock_env(), info.clone(), msg).unwrap();
+
+        let sender = Addr::unchecked("Alice").to_string();
+        let recipient = Addr::unchecked("Bob").to_string();
+        let amount = Uint128::new(350);
+        let env = mock_env();
+        let start_time = env.block.time.plus_seconds(100).seconds();
+        let end_time = env.block.time.plus_seconds(400).seconds();
+
+        let msg = ExecuteMsg::Receive(Cw20ReceiveMsg {
+            sender,
+            amount,
+            msg: to_binary(&ReceiveMsg::CreateStream {
+                recipient,
+                start_time,
+                end_time,
+            })
+            .unwrap(),
+        });
+
+        // Make sure remaining funds were refunded if duration didn't divide evenly into amount
+        let res = execute(deps.as_mut(), env, info, msg).unwrap();
+        let refund_msg = res.messages[0].clone().msg;
+        assert_eq!(
+            refund_msg,
+            CosmosMsg::Wasm(WasmMsg::Execute {
+                contract_addr: String::from(MOCK_CONTRACT_ADDR),
+                msg: to_binary(&Cw20ExecuteMsg::Transfer {
+                    recipient: String::from("Alice"),
+                    amount: Uint128::new(50)
+                })
+                .unwrap(),
+                funds: vec![]
+            })
+        );
+
+        let msg = QueryMsg::GetStream { id: 1 };
+        let res = query(deps.as_ref(), mock_env(), msg).unwrap();
+        let stream: Stream = from_binary(&res).unwrap();
+
+        assert_eq!(
+            stream,
+            Stream {
+                owner: Addr::unchecked("Alice"),
+                recipient: Addr::unchecked("Bob"),
+                amount: Uint128::new(300), // original amount - refund
+                claimed_amount: Uint128::new(0),
                 start_time,
                 rate_per_second: Uint128::new(1),
                 end_time
@@ -375,10 +480,7 @@ mod tests {
         });
         info.sender = Addr::unchecked(MOCK_CONTRACT_ADDR);
         let err = execute(deps.as_mut(), mock_env(), info, msg).unwrap_err();
-        match err {
-            ContractError::InvalidStartTime {} => {}
-            e => panic!("unexpected error: {}", e),
-        }
+        assert_eq!(err, ContractError::InvalidStartTime {});
     }
 
     #[test]
@@ -410,11 +512,7 @@ mod tests {
         });
         info.sender = Addr::unchecked("wrongCw20");
         let err = execute(deps.as_mut(), mock_env(), info, msg).unwrap_err();
-
-        match err {
-            ContractError::Unauthorized {} => {}
-            e => panic!("unexpected error: {}", e),
-        }
+        assert_eq!(err, ContractError::Unauthorized {});
     }
 
     #[test]
@@ -445,6 +543,7 @@ mod tests {
             .unwrap(),
         });
         info.sender = Addr::unchecked(MOCK_CONTRACT_ADDR);
-        execute(deps.as_mut(), mock_env(), info, msg).unwrap_err();
+        let err = execute(deps.as_mut(), mock_env(), info, msg).unwrap_err();
+        assert_eq!(err, ContractError::InvalidDuration {});
     }
 }

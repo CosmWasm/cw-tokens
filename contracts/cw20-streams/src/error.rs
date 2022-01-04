@@ -1,42 +1,38 @@
 use cosmwasm_std::StdError;
 use thiserror::Error;
 
-#[derive(Error, Debug)]
+use cosmwasm_std::Addr;
+
+#[derive(Error, Debug, PartialEq)]
 pub enum ContractError {
     #[error("{0}")]
     Std(#[from] StdError),
 
-    #[error("Unauthorized")]
+    #[error("Not authorized to perform action")]
     Unauthorized {},
 
-    #[error("InvalidStartTime")]
+    #[error("The start time is invalid. Start time must be before the end time and after the current block time")]
     InvalidStartTime {},
 
-    #[error("StreamFullyClaimed")]
+    #[error("The stream has been fully claimed")]
     StreamFullyClaimed {},
 
-    #[error("StreamNotStarted")]
-    StreamNotStarted {},
+    #[error("The stream can only be claimed by original recipient")]
+    NotStreamRecipient { recipient: Addr },
 
-    #[error("NotStreamRecipient")]
-    NotStreamRecipient {},
-
-    #[error("NoFundsToClaim")]
+    #[error("No tokens have vested for this stream.")]
     NoFundsToClaim {},
 
-    #[error("StreamNotFound")]
+    #[error("Stream does not exist.")]
     StreamNotFound {},
 
-    #[error("InvalidDuration")]
+    // TODO: Implement refund
+    #[error("Amount must be greater than duration")]
     InvalidDuration {},
 
-    #[error("InvalidOwner")]
-    InvalidOwner {},
-
-    #[error("InvalidRecipient")]
+    #[error("Stream recipient cannot be the stream owner")]
     InvalidRecipient {},
 
-
-    #[error("Overflow")]
+    #[error("Numerical overflow")]
     Overflow {},
 }

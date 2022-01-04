@@ -30,6 +30,16 @@ pub enum ReceiveMsg {
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 #[serde(rename_all = "snake_case")]
+pub struct StreamParams {
+    pub owner: String,
+    pub recipient: String,
+    pub amount: Uint128,
+    pub start_time: u64,
+    pub end_time: u64,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+#[serde(rename_all = "snake_case")]
 pub enum QueryMsg {
     GetConfig {},
     GetStream { id: u64 },
