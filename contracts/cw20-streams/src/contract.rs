@@ -117,9 +117,9 @@ pub fn execute_create_stream(
     let mut response = Response::new()
         .add_attribute("method", "create_stream")
         .add_attribute("stream_id", id.to_string())
-        .add_attribute("owner", owner.to_string())
-        .add_attribute("recipient", recipient)
-        .add_attribute("amount", amount.to_string())
+        .add_attribute("owner", owner.clone())
+        .add_attribute("recipient", recipient.clone())
+        .add_attribute("amount", amount)
         .add_attribute("start_time", start_time.to_string())
         .add_attribute("end_time", end_time.to_string());
 
@@ -203,7 +203,7 @@ pub fn execute_withdraw(
     let config = CONFIG.load(deps.storage)?;
     let cw20 = Cw20Contract(config.cw20_addr);
     let msg = cw20.call(Cw20ExecuteMsg::Transfer {
-        recipient: stream.recipient.to_string(),
+        recipient: stream.recipient.clone().into(),
         amount: released,
     })?;
 
@@ -211,7 +211,7 @@ pub fn execute_withdraw(
         .add_attribute("method", "withdraw")
         .add_attribute("stream_id", id.to_string())
         .add_attribute("amount", released)
-        .add_attribute("recipient", stream.recipient.to_string())
+        .add_attribute("recipient", stream.recipient)
         .add_message(msg);
     Ok(res)
 }
@@ -230,8 +230,8 @@ pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
 fn query_config(deps: Deps) -> StdResult<ConfigResponse> {
     let config = CONFIG.load(deps.storage)?;
     Ok(ConfigResponse {
-        owner: config.owner.into_string(),
-        cw20_addr: config.cw20_addr.into_string(),
+        owner: config.owner.into(),
+        cw20_addr: config.cw20_addr.into(),
     })
 }
 
@@ -239,8 +239,8 @@ fn query_stream(deps: Deps, id: u64) -> StdResult<StreamResponse> {
     let stream = STREAMS.load(deps.storage, id)?;
     Ok(StreamResponse {
         id,
-        owner: stream.owner.into_string(),
-        recipient: stream.recipient.into_string(),
+        owner: stream.owner.into(),
+        recipient: stream.recipient.into(),
         amount: stream.amount,
         claimed_amount: stream.claimed_amount,
         rate_per_second: stream.rate_per_second,
