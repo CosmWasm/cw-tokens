@@ -35,4 +35,8 @@ pub enum ContractError {
 
     #[error("InvalidRecipient")]
     InvalidRecipient {},
+
+
+    #[error("Overflow")]
+    Overflow {},
 }

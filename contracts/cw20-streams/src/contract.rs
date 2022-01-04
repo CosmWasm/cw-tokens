@@ -6,7 +6,7 @@ use crate::state::{save_stream, Config, Stream, CONFIG, STREAMS, STREAM_SEQ};
 #[cfg(not(feature = "library"))]
 use cosmwasm_std::entry_point;
 use cosmwasm_std::{
-    from_binary, to_binary, Binary, Deps, DepsMut, Env, MessageInfo, Response, StdResult, Uint128,
+    from_binary, to_binary, Binary, Deps, DepsMut, Env, MessageInfo, Response, StdResult, Uint128, OverflowError,
 };
 use cw2::set_contract_version;
 use cw20::{Cw20Contract, Cw20ExecuteMsg, Cw20ReceiveMsg};
@@ -23,10 +23,11 @@ pub fn instantiate(
 ) -> Result<Response, ContractError> {
     set_contract_version(deps.storage, CONTRACT_NAME, CONTRACT_VERSION)?;
 
-    let owner = msg
-        .owner
-        .and_then(|s| deps.api.addr_validate(s.as_str()).ok())
-        .unwrap_or(info.sender);
+    let owner = match msg.owner {
+        Some(own) => deps.api.addr_validate(&own)?,
+        None => info.sender,
+    };
+
     let config = Config {
         owner: owner.clone(),
         cw20_addr: deps.api.addr_validate(msg.cw20_addr.as_str())?,
@@ -87,13 +88,14 @@ pub fn try_create_stream(
         return Err(ContractError::InvalidStartTime {});
     }
 
-    let duration: Uint128 = end_time.checked_sub(start_time).unwrap().into();
+    let duration: Uint128 = end_time.checked_sub(start_time).ok_or(ContractError::Overflow {})?.into();
 
     if amount < duration {
         return Err(ContractError::InvalidDuration {});
     }
 
-    if amount.u128().checked_rem(duration.u128()).unwrap() != 0 {
+    let duration_remainder: u128 = amount.u128().checked_rem(duration.u128()).ok_or(ContractError::Overflow {})?.into();
+    if duration_remainder != 0 {
         return Err(ContractError::InvalidDuration {});
     }
 
@@ -108,10 +110,11 @@ pub fn try_create_stream(
         end_time,
         rate_per_second,
     };
-    save_stream(deps, &stream)?;
+    let id = save_stream(deps, &stream)?;
 
     Ok(Response::new()
-        .add_attribute("method", "try_create_stream")
+        .add_attribute("method", "create_stream")
+        .add_attribute("id", id.to_string())
         .add_attribute("owner", owner)
         .add_attribute("recipient", recipient)
         .add_attribute("amount", amount)
@@ -148,6 +151,8 @@ pub fn execute_receive(
     }
 }
 
+fn math_error(e: OverflowError) -> ContractError { ContractError::Std(e.into()) }
+
 pub fn try_withdraw(
     env: Env,
     deps: DepsMut,
@@ -168,20 +173,18 @@ pub fn try_withdraw(
         return Err(ContractError::StreamNotStarted {});
     }
 
-    let unclaimed_amount = u128::from(block_time)
+    let unclaimed_amount = Uint128::from(block_time)
         .checked_sub(stream.start_time.into())
-        .unwrap()
-        .checked_mul(stream.rate_per_second.u128())
-        .unwrap()
-        .checked_sub(stream.claimed_amount.u128())
-        .unwrap();
-
+        .map_err(math_error)?
+        .checked_mul(stream.rate_per_second)
+        .map_err(math_error)?   
+        .checked_sub(stream.claimed_amount)
+        .map_err(math_error)?;
+    
     stream.claimed_amount = stream
         .claimed_amount
-        .u128()
         .checked_add(unclaimed_amount)
-        .unwrap()
-        .into();
+        .map_err(math_error)?;
 
     STREAMS.save(deps.storage, id, &stream)?;
 

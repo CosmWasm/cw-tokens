@@ -26,9 +26,10 @@ pub struct Stream {
 pub const STREAM_SEQ: Item<u64> = Item::new("stream_seq");
 pub const STREAMS: Map<u64, Stream> = Map::new("stream");
 
-pub fn save_stream(deps: DepsMut, stream: &Stream) -> StdResult<()> {
+pub fn save_stream(deps: DepsMut, stream: &Stream) -> StdResult<u64> {
     let id = STREAM_SEQ.load(deps.storage)?;
     let id = id.checked_add(1).unwrap();
     STREAM_SEQ.save(deps.storage, &id)?;
-    STREAMS.save(deps.storage, id, stream)
+    STREAMS.save(deps.storage, id, stream)?;
+    Ok(id)
 }
