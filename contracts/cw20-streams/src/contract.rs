@@ -58,6 +58,7 @@ pub fn execute(
 pub fn try_create_stream(
     env: Env,
     deps: DepsMut,
+    config: Config,
     owner: String,
     recipient: String,
     amount: Uint128,
@@ -74,7 +75,6 @@ pub fn try_create_stream(
         return Err(ContractError::InvalidRecipient {});
     }
 
-    let config = CONFIG.load(deps.storage)?;
     if config.owner == recipient {
         return Err(ContractError::InvalidRecipient {});
     }
@@ -142,6 +142,7 @@ pub fn execute_receive(
         } => try_create_stream(
             env,
             deps,
+            config,
             wrapped.sender,
             recipient,
             wrapped.amount,
