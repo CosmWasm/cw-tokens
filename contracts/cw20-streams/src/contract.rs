@@ -1,15 +1,18 @@
 use crate::error::ContractError;
 use crate::msg::{
-    ConfigResponse, ExecuteMsg, InstantiateMsg, QueryMsg, ReceiveMsg, StreamParams, StreamResponse,
+    ConfigResponse, ExecuteMsg, InstantiateMsg, ListStreamsResponse, QueryMsg, ReceiveMsg,
+    StreamParams, StreamResponse,
 };
 use crate::state::{save_stream, Config, Stream, CONFIG, STREAMS, STREAM_SEQ};
 #[cfg(not(feature = "library"))]
 use cosmwasm_std::entry_point;
 use cosmwasm_std::{
-    from_binary, to_binary, Binary, Deps, DepsMut, Env, MessageInfo, Response, StdResult, Uint128,
+    from_binary, to_binary, Binary, Deps, DepsMut, Env, MessageInfo, Order, Response, StdResult,
+    Uint128,
 };
 use cw2::set_contract_version;
 use cw20::{Cw20Contract, Cw20ExecuteMsg, Cw20ReceiveMsg};
+use cw_storage_plus::Bound;
 
 const CONTRACT_NAME: &str = "crates.io:cw20-streams";
 const CONTRACT_VERSION: &str = env!("CARGO_PKG_VERSION");
@@ -218,6 +221,9 @@ pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
     match msg {
         QueryMsg::GetConfig {} => to_binary(&query_config(deps)?),
         QueryMsg::GetStream { id } => to_binary(&query_stream(deps, id)?),
+        QueryMsg::ListStreams { start, limit } => {
+            to_binary(&query_list_streams(deps, start, limit)?)
+        }
     }
 }
 
@@ -232,6 +238,7 @@ fn query_config(deps: Deps) -> StdResult<ConfigResponse> {
 fn query_stream(deps: Deps, id: u64) -> StdResult<StreamResponse> {
     let stream = STREAMS.load(deps.storage, id)?;
     Ok(StreamResponse {
+        id,
         owner: stream.owner.into_string(),
         recipient: stream.recipient.into_string(),
         amount: stream.amount,
@@ -239,6 +246,27 @@ fn query_stream(deps: Deps, id: u64) -> StdResult<StreamResponse> {
         rate_per_second: stream.rate_per_second,
         start_time: stream.start_time,
         end_time: stream.end_time,
+    })
+}
+
+fn query_list_streams(
+    deps: Deps,
+    start: Option<u8>,
+    limit: Option<u8>,
+) -> StdResult<ListStreamsResponse> {
+    let start_key = start.unwrap_or(0);
+    let start_bound = Bound::inclusive(start_key.to_string().as_bytes());
+
+    let limit = limit.unwrap_or(5);
+    Ok(ListStreamsResponse {
+        streams: STREAMS
+            .range(deps.storage, Some(start_bound), None, Order::Ascending)
+            .take(limit.into())
+            .filter_map(|s| match s {
+                Ok(sp) => Some(sp.1), // TODO: Also return stream id
+                Err(_) => None,
+            })
+            .collect(),
     })
 }
 
