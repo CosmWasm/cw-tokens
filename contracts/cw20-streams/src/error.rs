@@ -28,7 +28,7 @@ pub enum ContractError {
 
     // TODO: Implement refund
     #[error("Amount must be greater than duration")]
-    InvalidDuration {},
+    AmountLessThanDuration {},
 
     #[error("Stream recipient cannot be the stream owner")]
     InvalidRecipient {},

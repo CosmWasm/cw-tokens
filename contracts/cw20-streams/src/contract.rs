@@ -87,7 +87,7 @@ pub fn execute_create_stream(
     let duration: Uint128 = (end_time - start_time).into();
 
     if amount < duration {
-        return Err(ContractError::InvalidDuration {});
+        return Err(ContractError::AmountLessThanDuration {});
     }
 
     // Duration must divide evenly into amount, so refund remainder
@@ -542,6 +542,6 @@ mod tests {
         });
         info.sender = Addr::unchecked(MOCK_CONTRACT_ADDR);
         let err = execute(deps.as_mut(), mock_env(), info, msg).unwrap_err();
-        assert_eq!(err, ContractError::InvalidDuration {});
+        assert_eq!(err, ContractError::AmountLessThanDuration {});
     }
 }
