@@ -26,7 +26,6 @@ pub enum ContractError {
     #[error("Stream does not exist.")]
     StreamNotFound {},
 
-    // TODO: Implement refund
     #[error("Amount must be greater than duration")]
     AmountLessThanDuration {},
 
