@@ -84,10 +84,7 @@ pub fn execute_create_stream(
         return Err(ContractError::InvalidStartTime {});
     }
 
-    let duration: Uint128 = end_time
-        .checked_sub(start_time)
-        .ok_or(ContractError::Overflow {})?
-        .into();
+    let duration: Uint128 = (end_time - start_time).into();
 
     if amount < duration {
         return Err(ContractError::InvalidDuration {});
