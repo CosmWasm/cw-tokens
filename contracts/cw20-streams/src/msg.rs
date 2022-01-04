@@ -1,4 +1,4 @@
-use crate::state::Stream;
+// use crate::state::Stream;
 use cosmwasm_std::Uint128;
 use cw20::Cw20ReceiveMsg;
 use schemars::JsonSchema;
@@ -72,5 +72,5 @@ pub struct StreamResponse {
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 pub struct ListStreamsResponse {
-    pub streams: Vec<Stream>,
+    pub streams: Vec<StreamResponse>,
 }

@@ -118,7 +118,7 @@ pub fn execute_create_stream(
         .add_attribute("method", "create_stream")
         .add_attribute("stream_id", id.to_string())
         .add_attribute("owner", owner.clone())
-        .add_attribute("recipient", recipient.clone())
+        .add_attribute("recipient", recipient)
         .add_attribute("amount", amount)
         .add_attribute("start_time", start_time.to_string())
         .add_attribute("end_time", end_time.to_string());
@@ -196,7 +196,7 @@ pub fn execute_withdraw(
         return Err(ContractError::NoFundsToClaim {});
     }
 
-    stream.claimed_amount += released;
+    stream.claimed_amount = vested;
 
     STREAMS.save(deps.storage, id, &stream)?;
 
@@ -254,19 +254,27 @@ fn query_list_streams(
     start: Option<u8>,
     limit: Option<u8>,
 ) -> StdResult<ListStreamsResponse> {
-    let start_key = start.unwrap_or(0);
-    let start_bound = Bound::inclusive(start_key.to_string().as_bytes());
-
+    let start = start.map(Bound::inclusive_int);
     let limit = limit.unwrap_or(5);
-    Ok(ListStreamsResponse {
-        streams: STREAMS
-            .range(deps.storage, Some(start_bound), None, Order::Ascending)
-            .take(limit.into())
-            .filter_map(|s| match s {
-                Ok(sp) => Some(sp.1), // TODO: Also return stream id
-                Err(_) => None,
-            })
-            .collect(),
+
+    let streams = STREAMS
+        .range(deps.storage, start, None, Order::Ascending)
+        .take(limit.into())
+        .map(map_stream)
+        .collect::<StdResult<Vec<_>>>()?;
+    Ok(ListStreamsResponse { streams })
+}
+
+fn map_stream(item: StdResult<(u64, Stream)>) -> StdResult<StreamResponse> {
+    item.map(|(id, stream)| StreamResponse {
+        id,
+        owner: stream.owner.to_string(),
+        recipient: stream.recipient.to_string(),
+        amount: stream.amount,
+        claimed_amount: stream.claimed_amount,
+        start_time: stream.start_time,
+        end_time: stream.end_time,
+        rate_per_second: stream.rate_per_second,
     })
 }
 
