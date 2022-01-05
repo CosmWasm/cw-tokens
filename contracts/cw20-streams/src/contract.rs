@@ -79,7 +79,7 @@ pub fn execute_create_stream(
     }
 
     let block_time = env.block.time.seconds();
-    if start_time < block_time {
+    if start_time <= block_time {
         return Err(ContractError::InvalidStartTime {});
     }
 
