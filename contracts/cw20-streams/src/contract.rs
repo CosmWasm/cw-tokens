@@ -281,7 +281,7 @@ fn map_stream(item: StdResult<(u64, Stream)>) -> StdResult<StreamResponse> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use cosmwasm_std::testing::{mock_dependencies, mock_env, mock_info, MOCK_CONTRACT_ADDR};
+    use cosmwasm_std::testing::{mock_dependencies, mock_env, mock_info};
     use cosmwasm_std::{Addr, CosmosMsg, WasmMsg};
 
     fn get_stream(deps: Deps, id: u64) -> Stream {
@@ -295,7 +295,7 @@ mod tests {
         let mut deps = mock_dependencies();
         let msg = InstantiateMsg {
             owner: None,
-            cw20_addr: String::from(MOCK_CONTRACT_ADDR),
+            cw20_addr: String::from("cw20"),
         };
 
         let info = mock_info("creator", &[]);
@@ -309,7 +309,7 @@ mod tests {
             config,
             Config {
                 owner: Addr::unchecked("creator"),
-                cw20_addr: Addr::unchecked(MOCK_CONTRACT_ADDR)
+                cw20_addr: Addr::unchecked("cw20")
             }
         );
     }
@@ -319,9 +319,9 @@ mod tests {
         let mut deps = mock_dependencies();
         let msg = InstantiateMsg {
             owner: None,
-            cw20_addr: String::from(MOCK_CONTRACT_ADDR),
+            cw20_addr: String::from("cw20"),
         };
-        let info = mock_info(MOCK_CONTRACT_ADDR, &[]);
+        let info = mock_info("cw20", &[]);
         instantiate(deps.as_mut(), mock_env(), info.clone(), msg).unwrap();
 
         let sender = Addr::unchecked("Alice").to_string();
@@ -357,7 +357,7 @@ mod tests {
         );
 
         // Stream has not started
-        let mut info = mock_info(MOCK_CONTRACT_ADDR, &[]);
+        let mut info = mock_info("cw20stream", &[]);
         info.sender = Addr::unchecked("Bob");
         let msg = ExecuteMsg::Withdraw { id: 1 };
         let err = execute(deps.as_mut(), env, info, msg).unwrap_err();
@@ -365,7 +365,7 @@ mod tests {
 
         // Stream has started so tokens have vested
         let msg = ExecuteMsg::Withdraw { id: 1 };
-        let mut info = mock_info(MOCK_CONTRACT_ADDR, &[]);
+        let mut info = mock_info("cw20stream", &[]);
         let mut env = mock_env();
         info.sender = Addr::unchecked("Bob");
         env.block.time = env.block.time.plus_seconds(150);
@@ -375,7 +375,7 @@ mod tests {
         assert_eq!(
             msg,
             CosmosMsg::Wasm(WasmMsg::Execute {
-                contract_addr: String::from(MOCK_CONTRACT_ADDR),
+                contract_addr: String::from("cw20"),
                 msg: to_binary(&Cw20ExecuteMsg::Transfer {
                     recipient: String::from("Bob"),
                     amount: Uint128::new(50)
@@ -402,7 +402,7 @@ mod tests {
 
         let mut env = mock_env();
         env.block.time = env.block.time.plus_seconds(500);
-        let mut info = mock_info(MOCK_CONTRACT_ADDR, &[]);
+        let mut info = mock_info("cw20stream", &[]);
         info.sender = Addr::unchecked("Bob");
         let msg = ExecuteMsg::Withdraw { id: 1 };
         let res = execute(deps.as_mut(), env, info, msg).unwrap();
@@ -411,7 +411,7 @@ mod tests {
         assert_eq!(
             msg,
             CosmosMsg::Wasm(WasmMsg::Execute {
-                contract_addr: String::from(MOCK_CONTRACT_ADDR),
+                contract_addr: String::from("cw20"),
                 msg: to_binary(&Cw20ExecuteMsg::Transfer {
                     recipient: String::from("Bob"),
                     amount: Uint128::new(150)
@@ -427,9 +427,9 @@ mod tests {
         let mut deps = mock_dependencies();
         let msg = InstantiateMsg {
             owner: None,
-            cw20_addr: String::from(MOCK_CONTRACT_ADDR),
+            cw20_addr: String::from("cw20"),
         };
-        let info = mock_info(MOCK_CONTRACT_ADDR, &[]);
+        let info = mock_info("cw20", &[]);
         instantiate(deps.as_mut(), mock_env(), info.clone(), msg).unwrap();
 
         let sender = Addr::unchecked("Alice").to_string();
@@ -456,7 +456,7 @@ mod tests {
         assert_eq!(
             refund_msg,
             CosmosMsg::Wasm(WasmMsg::Execute {
-                contract_addr: String::from(MOCK_CONTRACT_ADDR),
+                contract_addr: String::from("cw20"),
                 msg: to_binary(&Cw20ExecuteMsg::Transfer {
                     recipient: String::from("Alice"),
                     amount: Uint128::new(50)
@@ -486,7 +486,7 @@ mod tests {
 
         let msg = InstantiateMsg {
             owner: None,
-            cw20_addr: String::from(MOCK_CONTRACT_ADDR),
+            cw20_addr: String::from("cw20"),
         };
         let mut info = mock_info("Alice", &[]);
         instantiate(deps.as_mut(), mock_env(), info.clone(), msg).unwrap();
@@ -507,7 +507,7 @@ mod tests {
             })
             .unwrap(),
         });
-        info.sender = Addr::unchecked(MOCK_CONTRACT_ADDR);
+        info.sender = Addr::unchecked("cw20");
         let err = execute(deps.as_mut(), mock_env(), info, msg).unwrap_err();
         assert_eq!(err, ContractError::InvalidStartTime {});
     }
@@ -518,7 +518,7 @@ mod tests {
 
         let msg = InstantiateMsg {
             owner: None,
-            cw20_addr: String::from(MOCK_CONTRACT_ADDR),
+            cw20_addr: String::from("cw20"),
         };
         let mut info = mock_info("Alice", &[]);
         instantiate(deps.as_mut(), mock_env(), info.clone(), msg).unwrap();
@@ -550,7 +550,7 @@ mod tests {
 
         let msg = InstantiateMsg {
             owner: None,
-            cw20_addr: String::from(MOCK_CONTRACT_ADDR),
+            cw20_addr: String::from("cw20"),
         };
         let mut info = mock_info("Alice", &[]);
         instantiate(deps.as_mut(), mock_env(), info.clone(), msg).unwrap();
@@ -571,7 +571,7 @@ mod tests {
             })
             .unwrap(),
         });
-        info.sender = Addr::unchecked(MOCK_CONTRACT_ADDR);
+        info.sender = Addr::unchecked("cw20");
         let err = execute(deps.as_mut(), mock_env(), info, msg).unwrap_err();
         assert_eq!(err, ContractError::AmountLessThanDuration {});
     }
