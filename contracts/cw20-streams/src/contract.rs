@@ -284,6 +284,12 @@ mod tests {
     use cosmwasm_std::testing::{mock_dependencies, mock_env, mock_info, MOCK_CONTRACT_ADDR};
     use cosmwasm_std::{Addr, CosmosMsg, WasmMsg};
 
+    fn get_stream(deps: Deps, id: u64) -> Stream {
+        let msg = QueryMsg::GetStream { id };
+        let res = query(deps, mock_env(), msg).unwrap();
+        from_binary(&res).unwrap()
+    }
+
     #[test]
     fn initialization() {
         let mut deps = mock_dependencies();
@@ -337,12 +343,8 @@ mod tests {
         });
         execute(deps.as_mut(), env.clone(), info, msg).unwrap();
 
-        let msg = QueryMsg::GetStream { id: 1 };
-        let res = query(deps.as_ref(), mock_env(), msg).unwrap();
-        let stream: Stream = from_binary(&res).unwrap();
-
         assert_eq!(
-            stream,
+            get_stream(deps.as_ref(), 1),
             Stream {
                 owner: Addr::unchecked("Alice"),
                 recipient: Addr::unchecked("Bob"),
@@ -383,11 +385,8 @@ mod tests {
             })
         );
 
-        let msg = QueryMsg::GetStream { id: 1 };
-        let res = query(deps.as_ref(), mock_env(), msg).unwrap();
-        let stream: Stream = from_binary(&res).unwrap();
         assert_eq!(
-            stream,
+            get_stream(deps.as_ref(), 1),
             Stream {
                 owner: Addr::unchecked("Alice"),
                 recipient: Addr::unchecked("Bob"),
@@ -467,12 +466,8 @@ mod tests {
             })
         );
 
-        let msg = QueryMsg::GetStream { id: 1 };
-        let res = query(deps.as_ref(), mock_env(), msg).unwrap();
-        let stream: Stream = from_binary(&res).unwrap();
-
         assert_eq!(
-            stream,
+            get_stream(deps.as_ref(), 1),
             Stream {
                 owner: Addr::unchecked("Alice"),
                 recipient: Addr::unchecked("Bob"),
