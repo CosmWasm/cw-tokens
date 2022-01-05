@@ -357,7 +357,7 @@ mod tests {
         );
 
         // Stream has not started
-        let mut info = mock_info("cw20stream", &[]);
+        let mut info = mock_info("owner", &[]);
         info.sender = Addr::unchecked("Bob");
         let msg = ExecuteMsg::Withdraw { id: 1 };
         let err = execute(deps.as_mut(), env, info, msg).unwrap_err();
@@ -365,7 +365,7 @@ mod tests {
 
         // Stream has started so tokens have vested
         let msg = ExecuteMsg::Withdraw { id: 1 };
-        let mut info = mock_info("cw20stream", &[]);
+        let mut info = mock_info("owner", &[]);
         let mut env = mock_env();
         info.sender = Addr::unchecked("Bob");
         env.block.time = env.block.time.plus_seconds(150);
@@ -402,7 +402,7 @@ mod tests {
 
         let mut env = mock_env();
         env.block.time = env.block.time.plus_seconds(500);
-        let mut info = mock_info("cw20stream", &[]);
+        let mut info = mock_info("owner", &[]);
         info.sender = Addr::unchecked("Bob");
         let msg = ExecuteMsg::Withdraw { id: 1 };
         let res = execute(deps.as_mut(), env, info, msg).unwrap();
