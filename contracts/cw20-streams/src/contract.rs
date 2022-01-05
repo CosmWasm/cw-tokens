@@ -74,10 +74,6 @@ pub fn execute_create_stream(
     let owner = deps.api.addr_validate(&owner)?;
     let recipient = deps.api.addr_validate(&recipient)?;
 
-    if config.owner == recipient {
-        return Err(ContractError::InvalidRecipient {});
-    }
-
     if start_time > end_time {
         return Err(ContractError::InvalidStartTime {});
     }
