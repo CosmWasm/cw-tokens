@@ -32,6 +32,10 @@ pub enum ExecuteMsg {
         /// Proof is hex-encoded merkle proof.
         proof: Vec<String>,
     },
+    /// Burn the remaining tokens after expire time (only owner)
+    Burn {
+        stage: u8,
+    }
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]

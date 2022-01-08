@@ -32,6 +32,9 @@ pub enum ContractError {
     #[error("Airdrop stage {stage} expired at {expiration}")]
     StageExpired { stage: u8, expiration: Expiration },
 
+    #[error("Airdrop stage {stage} not expired yet")]
+    StageNotExpired { stage: u8, expiration: Expiration },
+
     #[error("Airdrop stage {stage} begins at {start}")]
     StageNotBegun { stage: u8, start: Scheduled },
 }

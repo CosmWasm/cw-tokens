@@ -2,10 +2,10 @@
 use cosmwasm_std::entry_point;
 use cosmwasm_std::{
     attr, to_binary, Addr, Binary, Deps, DepsMut, Env, MessageInfo, Response, StdResult, Uint128,
-    WasmMsg,
+    WasmMsg
 };
 use cw2::{get_contract_version, set_contract_version};
-use cw20::Cw20ExecuteMsg;
+use cw20::{Cw20ExecuteMsg, Cw20QueryMsg, BalanceResponse};
 use cw_utils::{Expiration, Scheduled};
 use sha2::Digest;
 use std::convert::TryInto;
@@ -67,6 +67,7 @@ pub fn execute(
             amount,
             proof,
         } => execute_claim(deps, env, info, stage, amount, proof),
+        ExecuteMsg::Burn { stage } => execute_burn(deps, env, info, stage),
     }
 }
 
@@ -208,6 +209,56 @@ pub fn execute_claim(
             attr("stage", stage.to_string()),
             attr("address", info.sender),
             attr("amount", amount),
+        ]);
+    Ok(res)
+}
+
+pub fn execute_burn(
+    deps: DepsMut,
+    env: Env,
+    info: MessageInfo,
+    stage: u8,
+) -> Result<Response, ContractError> {
+    // authorize owner
+    let cfg = CONFIG.load(deps.storage)?;
+    let owner = cfg.owner.ok_or(ContractError::Unauthorized {})?;
+    if info.sender != owner {
+        return Err(ContractError::Unauthorized {});
+    }
+
+    // make sure is expired
+    let expiration = STAGE_EXPIRATION.load(deps.storage, stage)?;
+    if !expiration.is_expired(&env.block) {
+        return Err(ContractError::StageNotExpired { stage, expiration });
+    }
+
+    // Get balance
+    let balance: BalanceResponse = deps
+        .querier
+        .query_wasm_smart(
+            &cfg.cw20_token_address.to_string(),
+            &Cw20QueryMsg::Balance {
+                address: env.contract.address.to_string(),
+            },
+        )
+        .unwrap_or(BalanceResponse {
+            balance: Uint128::zero(),
+        });
+
+    // Burn the tokens and response
+    let res = Response::new()
+        .add_message(WasmMsg::Execute {
+            contract_addr: cfg.cw20_token_address.to_string(),
+            funds: vec![],
+            msg: to_binary(&Cw20ExecuteMsg::Burn {
+                amount: balance.balance
+            })?,
+        })
+        .add_attributes(vec![
+            attr("action", "burn"),
+            attr("stage", stage.to_string()),
+            attr("address", info.sender),
+            attr("amount", balance.balance),
         ]);
     Ok(res)
 }
