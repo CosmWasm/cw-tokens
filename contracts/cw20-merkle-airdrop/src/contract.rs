@@ -5,18 +5,18 @@ use cosmwasm_std::{
     WasmMsg
 };
 use cw2::{get_contract_version, set_contract_version};
-use cw20::{Cw20ExecuteMsg, Cw20QueryMsg, BalanceResponse};
+use cw20::{Cw20ExecuteMsg};
 use cw_utils::{Expiration, Scheduled};
 use sha2::Digest;
 use std::convert::TryInto;
 
 use crate::error::ContractError;
 use crate::msg::{
-    ConfigResponse, ExecuteMsg, InstantiateMsg, IsClaimedResponse, LatestStageResponse,
+    ConfigResponse, ExecuteMsg, InstantiateMsg, IsClaimedResponse, TotalClaimedResponse, LatestStageResponse,
     MerkleRootResponse, MigrateMsg, QueryMsg,
 };
 use crate::state::{
-    Config, CLAIM, CONFIG, LATEST_STAGE, MERKLE_ROOT, STAGE_EXPIRATION, STAGE_START,
+    Config, CLAIM, CONFIG, LATEST_STAGE, MERKLE_ROOT, STAGE_EXPIRATION, STAGE_START, STAGE_AMOUNT, STAGE_AMOUNT_CLAIMED
 };
 
 // Version info, for migration info
@@ -61,7 +61,8 @@ pub fn execute(
             merkle_root,
             expiration,
             start,
-        } => execute_register_merkle_root(deps, env, info, merkle_root, expiration, start),
+            total_amount
+        } => execute_register_merkle_root(deps, env, info, merkle_root, expiration, start, total_amount),
         ExecuteMsg::Claim {
             stage,
             amount,
@@ -105,6 +106,7 @@ pub fn execute_register_merkle_root(
     merkle_root: String,
     expiration: Option<Expiration>,
     start: Option<Scheduled>,
+    total_amount: Option<Uint128>
 ) -> Result<Response, ContractError> {
     let cfg = CONFIG.load(deps.storage)?;
 
@@ -132,10 +134,16 @@ pub fn execute_register_merkle_root(
         STAGE_START.save(deps.storage, stage, &start)?;
     }
 
+    // save total airdropped amount
+    let amount = total_amount.unwrap_or(Uint128::zero());
+    STAGE_AMOUNT.save(deps.storage, stage, &amount)?;
+    STAGE_AMOUNT_CLAIMED.save(deps.storage, stage, &Uint128::zero())?;
+
     Ok(Response::new().add_attributes(vec![
         attr("action", "register_merkle_root"),
         attr("stage", stage.to_string()),
         attr("merkle_root", merkle_root),
+        attr("total_amount", amount)
     ]))
 }
 
@@ -195,6 +203,11 @@ pub fn execute_claim(
     // Update claim index to the current stage
     CLAIM.save(deps.storage, (&info.sender, stage), &true)?;
 
+    // Update total claimed to reflect 
+    let mut claimed_amount = STAGE_AMOUNT_CLAIMED.load(deps.storage, stage)?;
+    claimed_amount += amount;
+    STAGE_AMOUNT_CLAIMED.save(deps.storage, stage, &claimed_amount)?;
+
     let res = Response::new()
         .add_message(WasmMsg::Execute {
             contract_addr: config.cw20_token_address.to_string(),
@@ -232,18 +245,17 @@ pub fn execute_burn(
         return Err(ContractError::StageNotExpired { stage, expiration });
     }
 
+    // Get total amount per stage and total claimed
+    let total_amount = STAGE_AMOUNT.load(deps.storage, stage)?;
+    let claimed_amount = STAGE_AMOUNT_CLAIMED.load(deps.storage, stage)?;
+
+    // impossible but who knows
+    if claimed_amount > total_amount {
+        return Err(ContractError::Unauthorized {});
+    }
+
     // Get balance
-    let balance: BalanceResponse = deps
-        .querier
-        .query_wasm_smart(
-            &cfg.cw20_token_address.to_string(),
-            &Cw20QueryMsg::Balance {
-                address: env.contract.address.to_string(),
-            },
-        )
-        .unwrap_or(BalanceResponse {
-            balance: Uint128::zero(),
-        });
+    let balance_to_burn = total_amount - claimed_amount;
 
     // Burn the tokens and response
     let res = Response::new()
@@ -251,14 +263,14 @@ pub fn execute_burn(
             contract_addr: cfg.cw20_token_address.to_string(),
             funds: vec![],
             msg: to_binary(&Cw20ExecuteMsg::Burn {
-                amount: balance.balance
+                amount: balance_to_burn
             })?,
         })
         .add_attributes(vec![
             attr("action", "burn"),
             attr("stage", stage.to_string()),
             attr("address", info.sender),
-            attr("amount", balance.balance),
+            attr("amount", balance_to_burn),
         ]);
     Ok(res)
 }
@@ -271,6 +283,9 @@ pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
         QueryMsg::LatestStage {} => to_binary(&query_latest_stage(deps)?),
         QueryMsg::IsClaimed { stage, address } => {
             to_binary(&query_is_claimed(deps, stage, address)?)
+        }
+        QueryMsg::TotalClaimed { stage } => {
+            to_binary(&query_total_claimed(deps, stage)?)
         }
     }
 }
@@ -287,11 +302,14 @@ pub fn query_merkle_root(deps: Deps, stage: u8) -> StdResult<MerkleRootResponse>
     let merkle_root = MERKLE_ROOT.load(deps.storage, stage)?;
     let expiration = STAGE_EXPIRATION.load(deps.storage, stage)?;
     let start = STAGE_START.may_load(deps.storage, stage)?;
+    let total_amount = STAGE_AMOUNT.load(deps.storage, stage)?;
+
     let resp = MerkleRootResponse {
         stage,
         merkle_root,
         expiration,
         start,
+        total_amount
     };
 
     Ok(resp)
@@ -308,6 +326,13 @@ pub fn query_is_claimed(deps: Deps, stage: u8, address: String) -> StdResult<IsC
     let key: (&Addr, u8) = (&deps.api.addr_validate(&address)?, stage);
     let is_claimed = CLAIM.may_load(deps.storage, key)?.unwrap_or(false);
     let resp = IsClaimedResponse { is_claimed };
+
+    Ok(resp)
+}
+
+pub fn query_total_claimed(deps: Deps, stage: u8) -> StdResult<TotalClaimedResponse> {
+    let total_claimed = STAGE_AMOUNT_CLAIMED.load(deps.storage, stage)?;
+    let resp = TotalClaimedResponse { total_claimed };
 
     Ok(resp)
 }
