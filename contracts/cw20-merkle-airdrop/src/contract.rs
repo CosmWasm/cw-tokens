@@ -642,6 +642,101 @@ mod tests {
         );
     }
 
+    const TEST_DATA_1_MULTI: &[u8] = include_bytes!("../testdata/airdrop_stage_1_test_multi_data.json");
+
+    #[derive(Deserialize, Debug)]
+    struct Proof {
+        account: String,
+        amount: Uint128,
+        proofs: Vec<String>,
+    }
+
+    #[derive(Deserialize, Debug)]
+    struct MultipleData {
+        total_amount: Uint128,
+        total_claimed_amount: Uint128,
+        root: String,
+        accounts: Vec<Proof>,
+    }
+
+    #[test]
+    fn multiple_claim() {
+        // Run test 1
+        let mut deps = mock_dependencies();
+        let test_data: MultipleData = from_slice(TEST_DATA_1_MULTI).unwrap();
+
+        let msg = InstantiateMsg {
+            owner: Some("owner0000".to_string()),
+            cw20_token_address: "token0000".to_string(),
+        };
+
+        let env = mock_env();
+        let info = mock_info("addr0000", &[]);
+        let _res = instantiate(deps.as_mut(), env, info, msg).unwrap();
+
+        let env = mock_env();
+        let info = mock_info("owner0000", &[]);
+        let msg = ExecuteMsg::RegisterMerkleRoot {
+            merkle_root: test_data.root,
+            expiration: None,
+            start: None,
+            total_amount: None
+        };
+        let _res = execute(deps.as_mut(), env, info, msg).unwrap();
+
+        // Loop accounts and claim
+        for account in test_data.accounts.iter() {
+        
+            let msg = ExecuteMsg::Claim {
+                amount: account.amount,
+                stage: 1u8,
+                proof: account.proofs.clone(),
+            };
+    
+            let env = mock_env();
+            let info = mock_info(account.account.as_str(), &[]);
+            let res = execute(deps.as_mut(), env.clone(), info.clone(), msg.clone()).unwrap();
+            let expected = SubMsg::new(CosmosMsg::Wasm(WasmMsg::Execute {
+                contract_addr: "token0000".to_string(),
+                funds: vec![],
+                msg: to_binary(&Cw20ExecuteMsg::Transfer {
+                    recipient: account.account.clone(),
+                    amount: account.amount,
+                })
+                .unwrap(),
+            }));
+            assert_eq!(res.messages, vec![expected]);
+    
+            assert_eq!(
+                res.attributes,
+                vec![
+                    attr("action", "claim"),
+                    attr("stage", "1"),
+                    attr("address", account.account.clone()),
+                    attr("amount", account.amount)
+                ]
+            );
+        }
+
+         // Check total claimed on stage 1
+         let env = mock_env();
+         assert_eq!(
+            from_binary::<TotalClaimedResponse>(
+                &query(
+                    deps.as_ref(),
+                    env.clone(),
+                    QueryMsg::TotalClaimed {
+                        stage: 1,
+                    }
+                )
+                .unwrap()
+            )
+            .unwrap()
+            .total_claimed,
+            test_data.total_claimed_amount
+        );
+    }
+
     #[test]
     fn stage_expires() {
         let mut deps = mock_dependencies();

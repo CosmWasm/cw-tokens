@@ -1,0 +1,42 @@
+{
+    "total_amount": "42103",
+    "total_claimed_amount": "21663",
+    "root": "b45c1ea28b26adb13e412933c9e055b01fdf7585304b00cd8f1cb220aa6c5e88",
+    "accounts": [
+        {
+            "account": "wasm1k9hwzxs889jpvd7env8z49gad3a3633vg350tq",
+            "amount": "100",
+            "proofs": [
+                "a714186eaedddde26b08b9afda38cf62fdf88d68e3aa0d5a4b55033487fe14a1",
+                "fb57090a813128eeb953a4210dd64ee73d2632b8158231effe2f0a18b2d3b5dd",
+                "c30992d264c74c58b636a31098c6c27a5fc08b3f61b7eafe2a33dcb445822343"
+            ]
+        },
+        {
+            "account": "wasm1uy9ucvgerneekxpnfwyfnpxvlsx5dzdpf0mzjd",
+            "amount": "1010",
+            "proofs": [
+                "d496b14f0a6207db1c9a1be70d5f3684d3c76f27c0bc75ee979f3e2a71a97ed0",
+                "e3746c7f0e1d1f60708f9e5facaaee77424a8c5f6527f1813f60e8c3755d3b5d",
+                "c30992d264c74c58b636a31098c6c27a5fc08b3f61b7eafe2a33dcb445822343"
+            ]
+        },
+        {
+            "account": "wasm1a4x6au55s0fusctyj2ulrxvfpmjcxa92k7ze2v",
+            "amount": "10220",
+            "proofs": [
+                "b69c5239d434753af2f6c3eab47f4e78c436f862f14e6989be5c9027c2b6dfe2",
+                "e3746c7f0e1d1f60708f9e5facaaee77424a8c5f6527f1813f60e8c3755d3b5d",
+                "c30992d264c74c58b636a31098c6c27a5fc08b3f61b7eafe2a33dcb445822343"
+            ]
+        },
+        {
+            "account": "wasm1ylna88nach9sn5n7qe7u5l6lh7dmt6lp2y63xx",
+            "amount": "10333",
+            "proofs": [
+                "f89c4ec6a98e26fb5690e50e16e189f9942f0576a5ba711ed75fe01140ddb2af",
+                "374f1a32b0a5d5dab16f8fbed8c248e183448732f897002375e0d4ca6e13ad73"
+            ]
+        }
+    ]
+}
