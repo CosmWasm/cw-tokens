@@ -29,7 +29,7 @@ pub const STAGE_START: Map<u8, Scheduled> = Map::new(STAGE_START_KEY);
 pub const STAGE_AMOUNT_KEY: &str = "stage_amount";
 pub const STAGE_AMOUNT: Map<u8, Uint128> = Map::new(STAGE_AMOUNT_KEY);
 
-pub const STAGE_AMOUNT_CLAIMED_KEY: &str = "claimed_amount";
+pub const STAGE_AMOUNT_CLAIMED_KEY: &str = "stage_claimed_amount";
 pub const STAGE_AMOUNT_CLAIMED: Map<u8, Uint128> = Map::new(STAGE_AMOUNT_CLAIMED_KEY);
 
 pub const MERKLE_ROOT_PREFIX: &str = "merkle_root";

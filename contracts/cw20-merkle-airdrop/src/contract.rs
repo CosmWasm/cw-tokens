@@ -439,6 +439,7 @@ mod tests {
                 .to_string(),
             expiration: None,
             start: None,
+            total_amount: None
         };
 
         let res = execute(deps.as_mut(), env.clone(), info, msg).unwrap();
@@ -450,7 +451,8 @@ mod tests {
                 attr(
                     "merkle_root",
                     "634de21cde1044f41d90373733b0f0fb1c1c71f9652b905cdf159e73c4cf0d37"
-                )
+                ),
+                attr("total_amount", "0")
             ]
         );
 
@@ -505,6 +507,7 @@ mod tests {
             merkle_root: test_data.root,
             expiration: None,
             start: None,
+            total_amount: None
         };
         let _res = execute(deps.as_mut(), env, info, msg).unwrap();
 
@@ -538,6 +541,24 @@ mod tests {
             ]
         );
 
+        // Check total claimed on stage 1
+        assert_eq!(
+            from_binary::<TotalClaimedResponse>(
+                &query(
+                    deps.as_ref(),
+                    env.clone(),
+                    QueryMsg::TotalClaimed {
+                        stage: 1,
+                    }
+                )
+                .unwrap()
+            )
+            .unwrap()
+            .total_claimed,
+            test_data.amount
+        );
+
+        // Check address is claimed
         assert!(
             from_binary::<IsClaimedResponse>(
                 &query(
@@ -554,12 +575,13 @@ mod tests {
             .is_claimed
         );
 
-        // Second test
-        let test_data: Encoded = from_slice(TEST_DATA_2).unwrap();
-        // check claimed
+        // check error on double claim
         let res = execute(deps.as_mut(), env, info, msg).unwrap_err();
         assert_eq!(res, ContractError::Claimed {});
 
+        // Second test
+        let test_data: Encoded = from_slice(TEST_DATA_2).unwrap();
+        
         // register new drop
         let env = mock_env();
         let info = mock_info("owner0000", &[]);
@@ -567,8 +589,9 @@ mod tests {
             merkle_root: test_data.root,
             expiration: None,
             start: None,
+            total_amount: None
         };
-        let _res = execute(deps.as_mut(), env, info, msg).unwrap();
+        let _res = execute(deps.as_mut(), env.clone(), info, msg).unwrap();
 
         // Claim next airdrop
         let msg = ExecuteMsg::Claim {
@@ -579,7 +602,7 @@ mod tests {
 
         let env = mock_env();
         let info = mock_info(test_data.account.as_str(), &[]);
-        let res = execute(deps.as_mut(), env, info, msg).unwrap();
+        let res = execute(deps.as_mut(), env.clone(), info, msg).unwrap();
         let expected: SubMsg<_> = SubMsg::new(CosmosMsg::Wasm(WasmMsg::Execute {
             contract_addr: "token0000".to_string(),
             funds: vec![],
@@ -599,6 +622,23 @@ mod tests {
                 attr("address", test_data.account),
                 attr("amount", test_data.amount)
             ]
+        );
+
+        // Check total claimed on stage 2
+        assert_eq!(
+            from_binary::<TotalClaimedResponse>(
+                &query(
+                    deps.as_ref(),
+                    env.clone(),
+                    QueryMsg::TotalClaimed {
+                        stage: 2,
+                    }
+                )
+                .unwrap()
+            )
+            .unwrap()
+            .total_claimed,
+            test_data.amount
         );
     }
 
@@ -623,6 +663,7 @@ mod tests {
                 .to_string(),
             expiration: Some(Expiration::AtHeight(100)),
             start: None,
+            total_amount: None
         };
         execute(deps.as_mut(), env.clone(), info.clone(), msg).unwrap();
 
@@ -664,6 +705,7 @@ mod tests {
                 .to_string(),
             expiration: None,
             start: Some(Scheduled::AtHeight(200_000)),
+            total_amount: None
         };
         execute(deps.as_mut(), env.clone(), info.clone(), msg).unwrap();
 
@@ -705,6 +747,7 @@ mod tests {
                 .to_string(),
             expiration: None,
             start: None,
+            total_amount: None
         };
         let _res = execute(deps.as_mut(), env, info, msg).unwrap();
 
@@ -734,6 +777,7 @@ mod tests {
                 .to_string(),
             expiration: None,
             start: None,
+            total_amount: None
         };
         let res = execute(deps.as_mut(), env, info, msg).unwrap_err();
         assert_eq!(res, ContractError::Unauthorized {});
@@ -746,6 +790,7 @@ mod tests {
                 .to_string(),
             expiration: None,
             start: None,
+            total_amount: None
         };
         let res = execute(deps.as_mut(), env, info, msg).unwrap_err();
         assert_eq!(res, ContractError::Unauthorized {});
