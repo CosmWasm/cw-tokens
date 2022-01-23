@@ -737,6 +737,7 @@ mod tests {
         );
     }
 
+    // Check expiration. Chain height in tests is 12345
     #[test]
     fn stage_expires() {
         let mut deps = mock_dependencies();
@@ -777,6 +778,132 @@ mod tests {
                 expiration: Expiration::AtHeight(100)
             }
         )
+    }
+
+    #[test]
+    fn cant_burn() {
+        let mut deps = mock_dependencies();
+
+        let msg = InstantiateMsg {
+            owner: Some("owner0000".to_string()),
+            cw20_token_address: "token0000".to_string(),
+        };
+
+        let env = mock_env();
+        let info = mock_info("addr0000", &[]);
+        let _res = instantiate(deps.as_mut(), env, info, msg).unwrap();
+
+        // can register merkle root
+        let env = mock_env();
+        let info = mock_info("owner0000", &[]);
+        let msg = ExecuteMsg::RegisterMerkleRoot {
+            merkle_root: "5d4f48f147cb6cb742b376dce5626b2a036f69faec10cd73631c791780e150fc"
+                .to_string(),
+            expiration: Some(Expiration::AtHeight(12346)),
+            start: None,
+            total_amount: Some(Uint128::new(100000))
+        };
+        execute(deps.as_mut(), env.clone(), info.clone(), msg).unwrap();
+
+        // Can't burn not expired stage
+        let msg = ExecuteMsg::Burn {
+            stage: 1u8,
+        };
+
+        let res = execute(deps.as_mut(), env, info, msg).unwrap_err();
+        assert_eq!(
+            res,
+            ContractError::StageNotExpired {
+                stage: 1,
+                expiration: Expiration::AtHeight(12346)
+            }
+        )
+    }
+
+    #[test]
+    fn can_burn() {
+        let mut deps = mock_dependencies();
+        let test_data: Encoded = from_slice(TEST_DATA_1).unwrap();
+
+        let msg = InstantiateMsg {
+            owner: Some("owner0000".to_string()),
+            cw20_token_address: "token0000".to_string(),
+        };
+
+        let mut env = mock_env();
+        let info = mock_info("addr0000", &[]);
+        let _res = instantiate(deps.as_mut(), env.clone(), info, msg).unwrap();
+
+        let info = mock_info("owner0000", &[]);
+        let msg = ExecuteMsg::RegisterMerkleRoot {
+            merkle_root: test_data.root,
+            expiration: Some(Expiration::AtHeight(12500)),
+            start: None,
+            total_amount: Some(Uint128::new(10000))
+        };
+        execute(deps.as_mut(), env.clone(), info.clone(), msg).unwrap();
+
+        // Claim some tokens
+        let msg = ExecuteMsg::Claim {
+            amount: test_data.amount,
+            stage: 1u8,
+            proof: test_data.proofs,
+        };
+
+        let info = mock_info(test_data.account.as_str(), &[]);
+        let res = execute(deps.as_mut(), env.clone(), info.clone(), msg.clone()).unwrap();
+        let expected = SubMsg::new(CosmosMsg::Wasm(WasmMsg::Execute {
+            contract_addr: "token0000".to_string(),
+            funds: vec![],
+            msg: to_binary(&Cw20ExecuteMsg::Transfer {
+                recipient: test_data.account.clone(),
+                amount: test_data.amount,
+            })
+            .unwrap(),
+        }));
+        assert_eq!(res.messages, vec![expected]);
+
+        assert_eq!(
+            res.attributes,
+            vec![
+                attr("action", "claim"),
+                attr("stage", "1"),
+                attr("address", test_data.account.clone()),
+                attr("amount", test_data.amount)
+            ]
+        );
+
+        // makes the stage expire
+        env.block.height = 12501;
+
+        // Can burn after expired stage
+        let msg = ExecuteMsg::Burn {
+            stage: 1u8,
+        };
+
+        let info = mock_info("owner0000", &[]);
+        let res = execute(deps.as_mut(), env, info, msg).unwrap();
+        
+        let expected = SubMsg::new(CosmosMsg::Wasm(WasmMsg::Execute {
+            contract_addr: "token0000".to_string(),
+            funds: vec![],
+            msg: to_binary(&Cw20ExecuteMsg::Burn {
+                amount: Uint128::new(9900),
+            })
+            .unwrap(),
+        }));
+        assert_eq!(res.messages, vec![expected]);
+
+        assert_eq!(
+            res.attributes,
+            vec![
+                attr("action", "burn"),
+                attr("stage", "1"),
+                attr("address", "owner0000"),
+                attr("amount", Uint128::new(9900)),
+            ]
+        );
+
     }
 
     #[test]
