@@ -24,6 +24,7 @@ pub enum ExecuteMsg {
         merkle_root: String,
         expiration: Option<Expiration>,
         start: Option<Scheduled>,
+        total_amount: Option<Uint128>
     },
     /// Claim does not check if contract has enough funds, owner must ensure it.
     Claim {
@@ -32,6 +33,10 @@ pub enum ExecuteMsg {
         /// Proof is hex-encoded merkle proof.
         proof: Vec<String>,
     },
+    /// Burn the remaining tokens after expire time (only owner)
+    Burn {
+        stage: u8,
+    }
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
@@ -41,6 +46,7 @@ pub enum QueryMsg {
     MerkleRoot { stage: u8 },
     LatestStage {},
     IsClaimed { stage: u8, address: String },
+    TotalClaimed { stage: u8 }
 }
 
 #[derive(Serialize, Deserialize, Clone, PartialEq, JsonSchema, Debug)]
@@ -57,6 +63,7 @@ pub struct MerkleRootResponse {
     pub merkle_root: String,
     pub expiration: Expiration,
     pub start: Option<Scheduled>,
+    pub total_amount: Uint128
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
@@ -67,6 +74,11 @@ pub struct LatestStageResponse {
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 pub struct IsClaimedResponse {
     pub is_claimed: bool,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+pub struct TotalClaimedResponse {
+    pub total_claimed: Uint128,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
