@@ -20,4 +20,7 @@ pub enum ContractError {
 
     #[error("Escrow id already in use")]
     AlreadyInUse {},
+
+    #[error("Recipient is not set")]
+    RecipientNotSet {},
 }

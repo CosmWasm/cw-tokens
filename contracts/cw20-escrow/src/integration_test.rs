@@ -87,7 +87,9 @@ fn escrow_happy_path_cw20_tokens() {
     let create_msg = ReceiveMsg::Create(CreateMsg {
         id: id.clone(),
         arbiter: arb.to_string(),
-        recipient: ben.clone(),
+        recipient: Some(ben.clone()),
+        title: "some_title".to_string(),
+        description: "some_description".to_string(),
         end_height: None,
         end_time: None,
         cw20_whitelist: None,
@@ -126,7 +128,7 @@ fn escrow_happy_path_cw20_tokens() {
         .unwrap();
     assert_eq!(id, details.id);
     assert_eq!(arb, details.arbiter);
-    assert_eq!(ben, details.recipient);
+    assert_eq!(Some(ben.clone()), details.recipient);
     assert_eq!(
         vec![Cw20Coin {
             address: cash_addr.to_string(),

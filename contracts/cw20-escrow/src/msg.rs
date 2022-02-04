@@ -16,6 +16,11 @@ pub enum ExecuteMsg {
     TopUp {
         id: String,
     },
+    /// Set the recipient of the given escrow
+    SetRecipient {
+        id: String,
+        recipient: String,
+    },
     /// Approve sends all tokens to the recipient.
     /// Only the arbiter can do this
     Approve {
@@ -50,7 +55,11 @@ pub struct CreateMsg {
     /// arbiter can decide to approve or refund the escrow
     pub arbiter: String,
     /// if approved, funds go to the recipient
-    pub recipient: String,
+    pub recipient: Option<String>,
+    /// Title of the escrow
+    pub title: String,
+    /// Longer description of the escrow, e.g. what conditions should be met
+    pub description: String,
     /// When end height set and block height exceeds this value, the escrow is expired.
     /// Once an escrow is expired, it can be returned to the original funder (via "refund").
     pub end_height: Option<u64>,
@@ -104,9 +113,13 @@ pub struct DetailsResponse {
     /// arbiter can decide to approve or refund the escrow
     pub arbiter: String,
     /// if approved, funds go to the recipient
-    pub recipient: String,
+    pub recipient: Option<String>,
     /// if refunded, funds go to the source
     pub source: String,
+    /// Title of the escrow
+    pub title: String,
+    /// Longer description of the escrow, e.g. what conditions should be met
+    pub description: String,
     /// When end height set and block height exceeds this value, the escrow is expired.
     /// Once an escrow is expired, it can be returned to the original funder (via "refund").
     pub end_height: Option<u64>,

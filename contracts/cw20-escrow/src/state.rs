@@ -51,10 +51,14 @@ impl GenericBalance {
 pub struct Escrow {
     /// arbiter can decide to approve or refund the escrow
     pub arbiter: Addr,
-    /// if approved, funds go to the recipient
-    pub recipient: Addr,
+    /// if approved, funds go to the recipient, cannot approve if recipient is none
+    pub recipient: Option<Addr>,
     /// if refunded, funds go to the source
     pub source: Addr,
+    /// Title of the escrow, for example for a bug bounty "Fix issue in contract.rs"
+    pub title: String,
+    /// Description of the escrow, a more in depth description of how to meet the escrow condition
+    pub description: String,
     /// When end height set and block height exceeds this value, the escrow is expired.
     /// Once an escrow is expired, it can be returned to the original funder (via "refund").
     pub end_height: Option<u64>,
@@ -115,8 +119,10 @@ mod tests {
     fn dummy_escrow() -> Escrow {
         Escrow {
             arbiter: Addr::unchecked("arb"),
-            recipient: Addr::unchecked("recip"),
+            recipient: Some(Addr::unchecked("recip")),
             source: Addr::unchecked("source"),
+            title: "some_escrow".to_string(),
+            description: "some escrow desc".to_string(),
             end_height: None,
             end_time: None,
             balance: Default::default(),
