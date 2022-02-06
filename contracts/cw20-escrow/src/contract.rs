@@ -98,11 +98,8 @@ pub fn execute_create(
             }
         }
     };
-    let recipient = if msg.recipient.is_some() {
-        Some(deps.api.addr_validate(&msg.recipient.unwrap())?)
-    } else {
-        None
-    };
+    
+    let recipient: Option<Addr> = msg.recipient.and_then(|addr| deps.api.addr_validate(&addr).ok());
 
     let escrow = Escrow {
         arbiter: deps.api.addr_validate(&msg.arbiter)?,
@@ -137,14 +134,15 @@ pub fn execute_set_recipient(
     if info.sender != escrow.arbiter {
         return Err(ContractError::Unauthorized {});
     }
+
     let recipient = deps.api.addr_validate(recipient.as_str())?;
     escrow.recipient = Some(recipient.clone());
-
     ESCROWS.save(deps.storage, &id, &escrow)?;
+
     Ok(Response::new().add_attributes(vec![
         ("action", "set_recipient"),
-        ("id", id.as_str()),
-        ("recipient", recipient.as_str()),
+        ("id", id.into()),
+        ("recipient", recipient.into()),
     ]))
 }
 
@@ -185,26 +183,26 @@ pub fn execute_approve(
     let escrow = ESCROWS.load(deps.storage, &id)?;
 
     if info.sender != escrow.arbiter {
-        Err(ContractError::Unauthorized {})
-    } else if escrow.is_expired(&env) {
-        Err(ContractError::Expired {})
-    } else {
-        if escrow.recipient.is_none() {
-            return Err(ContractError::RecipientNotSet {});
-        }
+        return Err(ContractError::Unauthorized {});
+    } 
+    if escrow.is_expired(&env) {
+        return Err(ContractError::Expired {});
+    }
+    
+        let recipient = rec.ok_or(ContractError::RecipientNotSet {})?;
+
         // we delete the escrow
         ESCROWS.remove(deps.storage, &id);
 
         // send all tokens out
         let messages: Vec<SubMsg> =
-            send_tokens(&escrow.recipient.clone().unwrap(), &escrow.balance)?;
+            send_tokens(&recipient, &escrow.balance)?;
 
         Ok(Response::new()
             .add_attribute("action", "approve")
             .add_attribute("id", id)
-            .add_attribute("to", escrow.recipient.unwrap_or_else(|| Addr::unchecked("")))
+            .add_attribute("to", recipient)
             .add_submessages(messages))
-    }
 }
 
 pub fn execute_refund(
@@ -293,11 +291,8 @@ fn query_details(deps: Deps, id: String) -> StdResult<DetailsResponse> {
         })
         .collect();
 
-    let recipient = if escrow.recipient.is_some() {
-        Some(escrow.recipient.unwrap().into_string())
-    } else {
-        None
-    };
+    let recipient = escrow.recipient.map(|addr| addr.into_string())
+
     let details = DetailsResponse {
         id,
         arbiter: escrow.arbiter.into(),
