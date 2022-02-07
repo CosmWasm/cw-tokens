@@ -478,6 +478,7 @@ mod tests {
     fn set_recipient_after_creation() {
         let mut deps = mock_dependencies();
 
+
         // instantiate an empty contract
         let instantiate_msg = InstantiateMsg {};
         let info = mock_info(&String::from("anyone"), &[]);
