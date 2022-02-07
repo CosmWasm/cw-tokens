@@ -98,8 +98,10 @@ pub fn execute_create(
             }
         }
     };
-    
-    let recipient: Option<Addr> = msg.recipient.and_then(|addr| deps.api.addr_validate(&addr).ok());
+
+    let recipient: Option<Addr> = msg
+        .recipient
+        .and_then(|addr| deps.api.addr_validate(&addr).ok());
 
     let escrow = Escrow {
         arbiter: deps.api.addr_validate(&msg.arbiter)?,
@@ -141,8 +143,8 @@ pub fn execute_set_recipient(
 
     Ok(Response::new().add_attributes(vec![
         ("action", "set_recipient"),
-        ("id", id.into()),
-        ("recipient", recipient.into()),
+        ("id", id.as_str()),
+        ("recipient", recipient.as_str()),
     ]))
 }
 
@@ -184,25 +186,24 @@ pub fn execute_approve(
 
     if info.sender != escrow.arbiter {
         return Err(ContractError::Unauthorized {});
-    } 
+    }
     if escrow.is_expired(&env) {
         return Err(ContractError::Expired {});
     }
-    
-        let recipient = rec.ok_or(ContractError::RecipientNotSet {})?;
 
-        // we delete the escrow
-        ESCROWS.remove(deps.storage, &id);
+    let recipient = escrow.recipient.ok_or(ContractError::RecipientNotSet {})?;
 
-        // send all tokens out
-        let messages: Vec<SubMsg> =
-            send_tokens(&recipient, &escrow.balance)?;
+    // we delete the escrow
+    ESCROWS.remove(deps.storage, &id);
 
-        Ok(Response::new()
-            .add_attribute("action", "approve")
-            .add_attribute("id", id)
-            .add_attribute("to", recipient)
-            .add_submessages(messages))
+    // send all tokens out
+    let messages: Vec<SubMsg> = send_tokens(&recipient, &escrow.balance)?;
+
+    Ok(Response::new()
+        .add_attribute("action", "approve")
+        .add_attribute("id", id)
+        .add_attribute("to", recipient)
+        .add_submessages(messages))
 }
 
 pub fn execute_refund(
@@ -291,7 +292,7 @@ fn query_details(deps: Deps, id: String) -> StdResult<DetailsResponse> {
         })
         .collect();
 
-    let recipient = escrow.recipient.map(|addr| addr.into_string())
+    let recipient = escrow.recipient.map(|addr| addr.into_string());
 
     let details = DetailsResponse {
         id,
@@ -477,7 +478,6 @@ mod tests {
     #[test]
     fn set_recipient_after_creation() {
         let mut deps = mock_dependencies();
-
 
         // instantiate an empty contract
         let instantiate_msg = InstantiateMsg {};

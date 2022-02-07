@@ -2,21 +2,22 @@
 use cosmwasm_std::entry_point;
 use cosmwasm_std::{
     attr, to_binary, Addr, Binary, Deps, DepsMut, Env, MessageInfo, Response, StdResult, Uint128,
-    WasmMsg
+    WasmMsg,
 };
 use cw2::{get_contract_version, set_contract_version};
-use cw20::{Cw20ExecuteMsg};
+use cw20::Cw20ExecuteMsg;
 use cw_utils::{Expiration, Scheduled};
 use sha2::Digest;
 use std::convert::TryInto;
 
 use crate::error::ContractError;
 use crate::msg::{
-    ConfigResponse, ExecuteMsg, InstantiateMsg, IsClaimedResponse, TotalClaimedResponse, LatestStageResponse,
-    MerkleRootResponse, MigrateMsg, QueryMsg,
+    ConfigResponse, ExecuteMsg, InstantiateMsg, IsClaimedResponse, LatestStageResponse,
+    MerkleRootResponse, MigrateMsg, QueryMsg, TotalClaimedResponse,
 };
 use crate::state::{
-    Config, CLAIM, CONFIG, LATEST_STAGE, MERKLE_ROOT, STAGE_EXPIRATION, STAGE_START, STAGE_AMOUNT, STAGE_AMOUNT_CLAIMED
+    Config, CLAIM, CONFIG, LATEST_STAGE, MERKLE_ROOT, STAGE_AMOUNT, STAGE_AMOUNT_CLAIMED,
+    STAGE_EXPIRATION, STAGE_START,
 };
 
 // Version info, for migration info
@@ -61,8 +62,16 @@ pub fn execute(
             merkle_root,
             expiration,
             start,
-            total_amount
-        } => execute_register_merkle_root(deps, env, info, merkle_root, expiration, start, total_amount),
+            total_amount,
+        } => execute_register_merkle_root(
+            deps,
+            env,
+            info,
+            merkle_root,
+            expiration,
+            start,
+            total_amount,
+        ),
         ExecuteMsg::Claim {
             stage,
             amount,
@@ -106,7 +115,7 @@ pub fn execute_register_merkle_root(
     merkle_root: String,
     expiration: Option<Expiration>,
     start: Option<Scheduled>,
-    total_amount: Option<Uint128>
+    total_amount: Option<Uint128>,
 ) -> Result<Response, ContractError> {
     let cfg = CONFIG.load(deps.storage)?;
 
@@ -143,7 +152,7 @@ pub fn execute_register_merkle_root(
         attr("action", "register_merkle_root"),
         attr("stage", stage.to_string()),
         attr("merkle_root", merkle_root),
-        attr("total_amount", amount)
+        attr("total_amount", amount),
     ]))
 }
 
@@ -203,7 +212,7 @@ pub fn execute_claim(
     // Update claim index to the current stage
     CLAIM.save(deps.storage, (&info.sender, stage), &true)?;
 
-    // Update total claimed to reflect 
+    // Update total claimed to reflect
     let mut claimed_amount = STAGE_AMOUNT_CLAIMED.load(deps.storage, stage)?;
     claimed_amount += amount;
     STAGE_AMOUNT_CLAIMED.save(deps.storage, stage, &claimed_amount)?;
@@ -263,7 +272,7 @@ pub fn execute_burn(
             contract_addr: cfg.cw20_token_address.to_string(),
             funds: vec![],
             msg: to_binary(&Cw20ExecuteMsg::Burn {
-                amount: balance_to_burn
+                amount: balance_to_burn,
             })?,
         })
         .add_attributes(vec![
@@ -284,9 +293,7 @@ pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
         QueryMsg::IsClaimed { stage, address } => {
             to_binary(&query_is_claimed(deps, stage, address)?)
         }
-        QueryMsg::TotalClaimed { stage } => {
-            to_binary(&query_total_claimed(deps, stage)?)
-        }
+        QueryMsg::TotalClaimed { stage } => to_binary(&query_total_claimed(deps, stage)?),
     }
 }
 
@@ -309,7 +316,7 @@ pub fn query_merkle_root(deps: Deps, stage: u8) -> StdResult<MerkleRootResponse>
         merkle_root,
         expiration,
         start,
-        total_amount
+        total_amount,
     };
 
     Ok(resp)
@@ -439,7 +446,7 @@ mod tests {
                 .to_string(),
             expiration: None,
             start: None,
-            total_amount: None
+            total_amount: None,
         };
 
         let res = execute(deps.as_mut(), env.clone(), info, msg).unwrap();
@@ -507,7 +514,7 @@ mod tests {
             merkle_root: test_data.root,
             expiration: None,
             start: None,
-            total_amount: None
+            total_amount: None,
         };
         let _res = execute(deps.as_mut(), env, info, msg).unwrap();
 
@@ -547,9 +554,7 @@ mod tests {
                 &query(
                     deps.as_ref(),
                     env.clone(),
-                    QueryMsg::TotalClaimed {
-                        stage: 1,
-                    }
+                    QueryMsg::TotalClaimed { stage: 1 }
                 )
                 .unwrap()
             )
@@ -581,7 +586,7 @@ mod tests {
 
         // Second test
         let test_data: Encoded = from_slice(TEST_DATA_2).unwrap();
-        
+
         // register new drop
         let env = mock_env();
         let info = mock_info("owner0000", &[]);
@@ -589,7 +594,7 @@ mod tests {
             merkle_root: test_data.root,
             expiration: None,
             start: None,
-            total_amount: None
+            total_amount: None,
         };
         let _res = execute(deps.as_mut(), env.clone(), info, msg).unwrap();
 
@@ -630,9 +635,7 @@ mod tests {
                 &query(
                     deps.as_ref(),
                     env.clone(),
-                    QueryMsg::TotalClaimed {
-                        stage: 2,
-                    }
+                    QueryMsg::TotalClaimed { stage: 2 }
                 )
                 .unwrap()
             )
@@ -642,7 +645,8 @@ mod tests {
         );
     }
 
-    const TEST_DATA_1_MULTI: &[u8] = include_bytes!("../testdata/airdrop_stage_1_test_multi_data.json");
+    const TEST_DATA_1_MULTI: &[u8] =
+        include_bytes!("../testdata/airdrop_stage_1_test_multi_data.json");
 
     #[derive(Deserialize, Debug)]
     struct Proof {
@@ -680,19 +684,18 @@ mod tests {
             merkle_root: test_data.root,
             expiration: None,
             start: None,
-            total_amount: None
+            total_amount: None,
         };
         let _res = execute(deps.as_mut(), env, info, msg).unwrap();
 
         // Loop accounts and claim
         for account in test_data.accounts.iter() {
-        
             let msg = ExecuteMsg::Claim {
                 amount: account.amount,
                 stage: 1u8,
                 proof: account.proofs.clone(),
             };
-    
+
             let env = mock_env();
             let info = mock_info(account.account.as_str(), &[]);
             let res = execute(deps.as_mut(), env.clone(), info.clone(), msg.clone()).unwrap();
@@ -706,7 +709,7 @@ mod tests {
                 .unwrap(),
             }));
             assert_eq!(res.messages, vec![expected]);
-    
+
             assert_eq!(
                 res.attributes,
                 vec![
@@ -718,16 +721,14 @@ mod tests {
             );
         }
 
-         // Check total claimed on stage 1
-         let env = mock_env();
-         assert_eq!(
+        // Check total claimed on stage 1
+        let env = mock_env();
+        assert_eq!(
             from_binary::<TotalClaimedResponse>(
                 &query(
                     deps.as_ref(),
                     env.clone(),
-                    QueryMsg::TotalClaimed {
-                        stage: 1,
-                    }
+                    QueryMsg::TotalClaimed { stage: 1 }
                 )
                 .unwrap()
             )
@@ -759,7 +760,7 @@ mod tests {
                 .to_string(),
             expiration: Some(Expiration::AtHeight(100)),
             start: None,
-            total_amount: None
+            total_amount: None,
         };
         execute(deps.as_mut(), env.clone(), info.clone(), msg).unwrap();
 
@@ -801,14 +802,12 @@ mod tests {
                 .to_string(),
             expiration: Some(Expiration::AtHeight(12346)),
             start: None,
-            total_amount: Some(Uint128::new(100000))
+            total_amount: Some(Uint128::new(100000)),
         };
         execute(deps.as_mut(), env.clone(), info.clone(), msg).unwrap();
 
         // Can't burn not expired stage
-        let msg = ExecuteMsg::Burn {
-            stage: 1u8,
-        };
+        let msg = ExecuteMsg::Burn { stage: 1u8 };
 
         let res = execute(deps.as_mut(), env, info, msg).unwrap_err();
         assert_eq!(
@@ -839,7 +838,7 @@ mod tests {
             merkle_root: test_data.root,
             expiration: Some(Expiration::AtHeight(12500)),
             start: None,
-            total_amount: Some(Uint128::new(10000))
+            total_amount: Some(Uint128::new(10000)),
         };
         execute(deps.as_mut(), env.clone(), info.clone(), msg).unwrap();
 
@@ -877,13 +876,11 @@ mod tests {
         env.block.height = 12501;
 
         // Can burn after expired stage
-        let msg = ExecuteMsg::Burn {
-            stage: 1u8,
-        };
+        let msg = ExecuteMsg::Burn { stage: 1u8 };
 
         let info = mock_info("owner0000", &[]);
         let res = execute(deps.as_mut(), env, info, msg).unwrap();
-        
+
         let expected = SubMsg::new(CosmosMsg::Wasm(WasmMsg::Execute {
             contract_addr: "token0000".to_string(),
             funds: vec![],
@@ -903,7 +900,6 @@ mod tests {
                 attr("amount", Uint128::new(9900)),
             ]
         );
-
     }
 
     #[test]
@@ -927,7 +923,7 @@ mod tests {
                 .to_string(),
             expiration: None,
             start: Some(Scheduled::AtHeight(200_000)),
-            total_amount: None
+            total_amount: None,
         };
         execute(deps.as_mut(), env.clone(), info.clone(), msg).unwrap();
 
@@ -969,7 +965,7 @@ mod tests {
                 .to_string(),
             expiration: None,
             start: None,
-            total_amount: None
+            total_amount: None,
         };
         let _res = execute(deps.as_mut(), env, info, msg).unwrap();
 
@@ -999,7 +995,7 @@ mod tests {
                 .to_string(),
             expiration: None,
             start: None,
-            total_amount: None
+            total_amount: None,
         };
         let res = execute(deps.as_mut(), env, info, msg).unwrap_err();
         assert_eq!(res, ContractError::Unauthorized {});
@@ -1012,7 +1008,7 @@ mod tests {
                 .to_string(),
             expiration: None,
             start: None,
-            total_amount: None
+            total_amount: None,
         };
         let res = execute(deps.as_mut(), env, info, msg).unwrap_err();
         assert_eq!(res, ContractError::Unauthorized {});
