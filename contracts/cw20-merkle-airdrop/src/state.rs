@@ -1,9 +1,7 @@
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
-use cosmwasm_std::{
-    Addr, Uint128
-};
+use cosmwasm_std::{Addr, Uint128};
 use cw_storage_plus::{Item, Map};
 use cw_utils::{Expiration, Scheduled};
 
@@ -12,6 +10,7 @@ pub struct Config {
     /// Owner If None set, contract is frozen.
     pub owner: Option<Addr>,
     pub cw20_token_address: Addr,
+    pub stage_enabled: Option<bool>,
 }
 
 pub const CONFIG_KEY: &str = "config";

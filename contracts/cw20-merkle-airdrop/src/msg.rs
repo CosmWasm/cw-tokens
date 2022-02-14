@@ -9,6 +9,8 @@ pub struct InstantiateMsg {
     /// Owner if none set to info.sender.
     pub owner: Option<String>,
     pub cw20_token_address: String,
+    /// MultiStageEnabled Some(_) when enabled, None when not.
+    pub multi_stage_enabled: Option<bool>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
@@ -24,19 +26,18 @@ pub enum ExecuteMsg {
         merkle_root: String,
         expiration: Option<Expiration>,
         start: Option<Scheduled>,
-        total_amount: Option<Uint128>
+        total_amount: Option<Uint128>,
     },
     /// Claim does not check if contract has enough funds, owner must ensure it.
     Claim {
-        stage: u8,
+        /// Stage is Some(_) when multistage is enabled, or None
+        stage: Option<u8>,
         amount: Uint128,
         /// Proof is hex-encoded merkle proof.
         proof: Vec<String>,
     },
     /// Burn the remaining tokens after expire time (only owner)
-    Burn {
-        stage: u8,
-    }
+    Burn { stage: u8 },
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
@@ -46,7 +47,7 @@ pub enum QueryMsg {
     MerkleRoot { stage: u8 },
     LatestStage {},
     IsClaimed { stage: u8, address: String },
-    TotalClaimed { stage: u8 }
+    TotalClaimed { stage: u8 },
 }
 
 #[derive(Serialize, Deserialize, Clone, PartialEq, JsonSchema, Debug)]
@@ -54,6 +55,7 @@ pub enum QueryMsg {
 pub struct ConfigResponse {
     pub owner: Option<String>,
     pub cw20_token_address: String,
+    pub multi_stage_enabled: Option<bool>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
@@ -63,7 +65,7 @@ pub struct MerkleRootResponse {
     pub merkle_root: String,
     pub expiration: Expiration,
     pub start: Option<Scheduled>,
-    pub total_amount: Uint128
+    pub total_amount: Uint128,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]

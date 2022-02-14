@@ -2,21 +2,22 @@
 use cosmwasm_std::entry_point;
 use cosmwasm_std::{
     attr, to_binary, Addr, Binary, Deps, DepsMut, Env, MessageInfo, Response, StdResult, Uint128,
-    WasmMsg
+    WasmMsg,
 };
 use cw2::{get_contract_version, set_contract_version};
-use cw20::{Cw20ExecuteMsg};
+use cw20::Cw20ExecuteMsg;
 use cw_utils::{Expiration, Scheduled};
 use sha2::Digest;
 use std::convert::TryInto;
 
 use crate::error::ContractError;
 use crate::msg::{
-    ConfigResponse, ExecuteMsg, InstantiateMsg, IsClaimedResponse, TotalClaimedResponse, LatestStageResponse,
-    MerkleRootResponse, MigrateMsg, QueryMsg,
+    ConfigResponse, ExecuteMsg, InstantiateMsg, IsClaimedResponse, LatestStageResponse,
+    MerkleRootResponse, MigrateMsg, QueryMsg, TotalClaimedResponse,
 };
 use crate::state::{
-    Config, CLAIM, CONFIG, LATEST_STAGE, MERKLE_ROOT, STAGE_EXPIRATION, STAGE_START, STAGE_AMOUNT, STAGE_AMOUNT_CLAIMED
+    Config, CLAIM, CONFIG, LATEST_STAGE, MERKLE_ROOT, STAGE_AMOUNT, STAGE_AMOUNT_CLAIMED,
+    STAGE_EXPIRATION, STAGE_START,
 };
 
 // Version info, for migration info
@@ -39,6 +40,7 @@ pub fn instantiate(
     let config = Config {
         owner: Some(owner),
         cw20_token_address: deps.api.addr_validate(&msg.cw20_token_address)?,
+        stage_enabled: msg.multi_stage_enabled,
     };
     CONFIG.save(deps.storage, &config)?;
 
@@ -61,13 +63,21 @@ pub fn execute(
             merkle_root,
             expiration,
             start,
-            total_amount
-        } => execute_register_merkle_root(deps, env, info, merkle_root, expiration, start, total_amount),
+            total_amount,
+        } => execute_register_merkle_root(
+            deps,
+            env,
+            info,
+            merkle_root,
+            expiration,
+            start,
+            total_amount,
+        ),
         ExecuteMsg::Claim {
             stage,
             amount,
             proof,
-        } => execute_claim(deps, env, info, stage, amount, proof),
+        } => execute_claim(deps, env, info, amount, proof, stage),
         ExecuteMsg::Burn { stage } => execute_burn(deps, env, info, stage),
     }
 }
@@ -106,9 +116,14 @@ pub fn execute_register_merkle_root(
     merkle_root: String,
     expiration: Option<Expiration>,
     start: Option<Scheduled>,
-    total_amount: Option<Uint128>
+    total_amount: Option<Uint128>,
 ) -> Result<Response, ContractError> {
     let cfg = CONFIG.load(deps.storage)?;
+
+    let stage = LATEST_STAGE.load(deps.storage)?;
+    if cfg.stage_enabled.is_none() && stage >= 1 {
+        return Err(ContractError::AlreadyRegistered {});
+    }
 
     // if owner set validate, otherwise unauthorized
     let owner = cfg.owner.ok_or(ContractError::Unauthorized {})?;
@@ -143,7 +158,7 @@ pub fn execute_register_merkle_root(
         attr("action", "register_merkle_root"),
         attr("stage", stage.to_string()),
         attr("merkle_root", merkle_root),
-        attr("total_amount", amount)
+        attr("total_amount", amount),
     ]))
 }
 
@@ -151,10 +166,13 @@ pub fn execute_claim(
     deps: DepsMut,
     env: Env,
     info: MessageInfo,
-    stage: u8,
     amount: Uint128,
     proof: Vec<String>,
+    stage: Option<u8>,
 ) -> Result<Response, ContractError> {
+    let config = CONFIG.load(deps.storage)?;
+    let stage = config.stage_enabled.and_then(|_| stage).unwrap_or(1);
+
     // airdrop begun
     let start = STAGE_START.may_load(deps.storage, stage)?;
     if let Some(start) = start {
@@ -174,7 +192,6 @@ pub fn execute_claim(
         return Err(ContractError::Claimed {});
     }
 
-    let config = CONFIG.load(deps.storage)?;
     let merkle_root = MERKLE_ROOT.load(deps.storage, stage)?;
 
     let user_input = format!("{}{}", info.sender, amount);
@@ -203,7 +220,7 @@ pub fn execute_claim(
     // Update claim index to the current stage
     CLAIM.save(deps.storage, (&info.sender, stage), &true)?;
 
-    // Update total claimed to reflect 
+    // Update total claimed to reflect
     let mut claimed_amount = STAGE_AMOUNT_CLAIMED.load(deps.storage, stage)?;
     claimed_amount += amount;
     STAGE_AMOUNT_CLAIMED.save(deps.storage, stage, &claimed_amount)?;
@@ -263,7 +280,7 @@ pub fn execute_burn(
             contract_addr: cfg.cw20_token_address.to_string(),
             funds: vec![],
             msg: to_binary(&Cw20ExecuteMsg::Burn {
-                amount: balance_to_burn
+                amount: balance_to_burn,
             })?,
         })
         .add_attributes(vec![
@@ -284,9 +301,7 @@ pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
         QueryMsg::IsClaimed { stage, address } => {
             to_binary(&query_is_claimed(deps, stage, address)?)
         }
-        QueryMsg::TotalClaimed { stage } => {
-            to_binary(&query_total_claimed(deps, stage)?)
-        }
+        QueryMsg::TotalClaimed { stage } => to_binary(&query_total_claimed(deps, stage)?),
     }
 }
 
@@ -295,6 +310,7 @@ pub fn query_config(deps: Deps) -> StdResult<ConfigResponse> {
     Ok(ConfigResponse {
         owner: cfg.owner.map(|o| o.to_string()),
         cw20_token_address: cfg.cw20_token_address.to_string(),
+        multi_stage_enabled: cfg.stage_enabled,
     })
 }
 
@@ -309,7 +325,7 @@ pub fn query_merkle_root(deps: Deps, stage: u8) -> StdResult<MerkleRootResponse>
         merkle_root,
         expiration,
         start,
-        total_amount
+        total_amount,
     };
 
     Ok(resp)
@@ -362,6 +378,7 @@ mod tests {
         let msg = InstantiateMsg {
             owner: Some("owner0000".to_string()),
             cw20_token_address: "anchor0000".to_string(),
+            multi_stage_enabled: Some(true),
         };
 
         let env = mock_env();
@@ -388,6 +405,7 @@ mod tests {
         let msg = InstantiateMsg {
             owner: None,
             cw20_token_address: "anchor0000".to_string(),
+            multi_stage_enabled: Some(true),
         };
 
         let env = mock_env();
@@ -425,6 +443,7 @@ mod tests {
         let msg = InstantiateMsg {
             owner: Some("owner0000".to_string()),
             cw20_token_address: "anchor0000".to_string(),
+            multi_stage_enabled: Some(true),
         };
 
         let env = mock_env();
@@ -439,7 +458,7 @@ mod tests {
                 .to_string(),
             expiration: None,
             start: None,
-            total_amount: None
+            total_amount: None,
         };
 
         let res = execute(deps.as_mut(), env.clone(), info, msg).unwrap();
@@ -495,6 +514,7 @@ mod tests {
         let msg = InstantiateMsg {
             owner: Some("owner0000".to_string()),
             cw20_token_address: "token0000".to_string(),
+            multi_stage_enabled: Some(true),
         };
 
         let env = mock_env();
@@ -507,13 +527,13 @@ mod tests {
             merkle_root: test_data.root,
             expiration: None,
             start: None,
-            total_amount: None
+            total_amount: None,
         };
         let _res = execute(deps.as_mut(), env, info, msg).unwrap();
 
         let msg = ExecuteMsg::Claim {
             amount: test_data.amount,
-            stage: 1u8,
+            stage: Some(1u8),
             proof: test_data.proofs,
         };
 
@@ -547,9 +567,7 @@ mod tests {
                 &query(
                     deps.as_ref(),
                     env.clone(),
-                    QueryMsg::TotalClaimed {
-                        stage: 1,
-                    }
+                    QueryMsg::TotalClaimed { stage: 1 }
                 )
                 .unwrap()
             )
@@ -581,7 +599,7 @@ mod tests {
 
         // Second test
         let test_data: Encoded = from_slice(TEST_DATA_2).unwrap();
-        
+
         // register new drop
         let env = mock_env();
         let info = mock_info("owner0000", &[]);
@@ -589,14 +607,14 @@ mod tests {
             merkle_root: test_data.root,
             expiration: None,
             start: None,
-            total_amount: None
+            total_amount: None,
         };
         let _res = execute(deps.as_mut(), env.clone(), info, msg).unwrap();
 
         // Claim next airdrop
         let msg = ExecuteMsg::Claim {
             amount: test_data.amount,
-            stage: 2u8,
+            stage: Some(2u8),
             proof: test_data.proofs,
         };
 
@@ -630,9 +648,7 @@ mod tests {
                 &query(
                     deps.as_ref(),
                     env.clone(),
-                    QueryMsg::TotalClaimed {
-                        stage: 2,
-                    }
+                    QueryMsg::TotalClaimed { stage: 2 }
                 )
                 .unwrap()
             )
@@ -642,7 +658,8 @@ mod tests {
         );
     }
 
-    const TEST_DATA_1_MULTI: &[u8] = include_bytes!("../testdata/airdrop_stage_1_test_multi_data.json");
+    const TEST_DATA_1_MULTI: &[u8] =
+        include_bytes!("../testdata/airdrop_stage_1_test_multi_data.json");
 
     #[derive(Deserialize, Debug)]
     struct Proof {
@@ -668,6 +685,7 @@ mod tests {
         let msg = InstantiateMsg {
             owner: Some("owner0000".to_string()),
             cw20_token_address: "token0000".to_string(),
+            multi_stage_enabled: Some(true),
         };
 
         let env = mock_env();
@@ -680,19 +698,18 @@ mod tests {
             merkle_root: test_data.root,
             expiration: None,
             start: None,
-            total_amount: None
+            total_amount: None,
         };
         let _res = execute(deps.as_mut(), env, info, msg).unwrap();
 
         // Loop accounts and claim
         for account in test_data.accounts.iter() {
-        
             let msg = ExecuteMsg::Claim {
                 amount: account.amount,
-                stage: 1u8,
+                stage: Some(1u8),
                 proof: account.proofs.clone(),
             };
-    
+
             let env = mock_env();
             let info = mock_info(account.account.as_str(), &[]);
             let res = execute(deps.as_mut(), env.clone(), info.clone(), msg.clone()).unwrap();
@@ -706,7 +723,7 @@ mod tests {
                 .unwrap(),
             }));
             assert_eq!(res.messages, vec![expected]);
-    
+
             assert_eq!(
                 res.attributes,
                 vec![
@@ -718,16 +735,14 @@ mod tests {
             );
         }
 
-         // Check total claimed on stage 1
-         let env = mock_env();
-         assert_eq!(
+        // Check total claimed on stage 1
+        let env = mock_env();
+        assert_eq!(
             from_binary::<TotalClaimedResponse>(
                 &query(
                     deps.as_ref(),
                     env.clone(),
-                    QueryMsg::TotalClaimed {
-                        stage: 1,
-                    }
+                    QueryMsg::TotalClaimed { stage: 1 }
                 )
                 .unwrap()
             )
@@ -745,6 +760,7 @@ mod tests {
         let msg = InstantiateMsg {
             owner: Some("owner0000".to_string()),
             cw20_token_address: "token0000".to_string(),
+            multi_stage_enabled: Some(true),
         };
 
         let env = mock_env();
@@ -759,14 +775,14 @@ mod tests {
                 .to_string(),
             expiration: Some(Expiration::AtHeight(100)),
             start: None,
-            total_amount: None
+            total_amount: None,
         };
         execute(deps.as_mut(), env.clone(), info.clone(), msg).unwrap();
 
         // can't claim expired
         let msg = ExecuteMsg::Claim {
             amount: Uint128::new(5),
-            stage: 1u8,
+            stage: Some(1u8),
             proof: vec![],
         };
 
@@ -787,6 +803,7 @@ mod tests {
         let msg = InstantiateMsg {
             owner: Some("owner0000".to_string()),
             cw20_token_address: "token0000".to_string(),
+            multi_stage_enabled: Some(true),
         };
 
         let env = mock_env();
@@ -801,14 +818,12 @@ mod tests {
                 .to_string(),
             expiration: Some(Expiration::AtHeight(12346)),
             start: None,
-            total_amount: Some(Uint128::new(100000))
+            total_amount: Some(Uint128::new(100000)),
         };
         execute(deps.as_mut(), env.clone(), info.clone(), msg).unwrap();
 
         // Can't burn not expired stage
-        let msg = ExecuteMsg::Burn {
-            stage: 1u8,
-        };
+        let msg = ExecuteMsg::Burn { stage: 1u8 };
 
         let res = execute(deps.as_mut(), env, info, msg).unwrap_err();
         assert_eq!(
@@ -828,6 +843,7 @@ mod tests {
         let msg = InstantiateMsg {
             owner: Some("owner0000".to_string()),
             cw20_token_address: "token0000".to_string(),
+            multi_stage_enabled: Some(true),
         };
 
         let mut env = mock_env();
@@ -839,14 +855,14 @@ mod tests {
             merkle_root: test_data.root,
             expiration: Some(Expiration::AtHeight(12500)),
             start: None,
-            total_amount: Some(Uint128::new(10000))
+            total_amount: Some(Uint128::new(10000)),
         };
         execute(deps.as_mut(), env.clone(), info.clone(), msg).unwrap();
 
         // Claim some tokens
         let msg = ExecuteMsg::Claim {
             amount: test_data.amount,
-            stage: 1u8,
+            stage: Some(1u8),
             proof: test_data.proofs,
         };
 
@@ -877,13 +893,11 @@ mod tests {
         env.block.height = 12501;
 
         // Can burn after expired stage
-        let msg = ExecuteMsg::Burn {
-            stage: 1u8,
-        };
+        let msg = ExecuteMsg::Burn { stage: 1u8 };
 
         let info = mock_info("owner0000", &[]);
         let res = execute(deps.as_mut(), env, info, msg).unwrap();
-        
+
         let expected = SubMsg::new(CosmosMsg::Wasm(WasmMsg::Execute {
             contract_addr: "token0000".to_string(),
             funds: vec![],
@@ -903,7 +917,6 @@ mod tests {
                 attr("amount", Uint128::new(9900)),
             ]
         );
-
     }
 
     #[test]
@@ -913,6 +926,7 @@ mod tests {
         let msg = InstantiateMsg {
             owner: Some("owner0000".to_string()),
             cw20_token_address: "token0000".to_string(),
+            multi_stage_enabled: Some(true),
         };
 
         let env = mock_env();
@@ -927,14 +941,14 @@ mod tests {
                 .to_string(),
             expiration: None,
             start: Some(Scheduled::AtHeight(200_000)),
-            total_amount: None
+            total_amount: None,
         };
         execute(deps.as_mut(), env.clone(), info.clone(), msg).unwrap();
 
         // can't claim expired
         let msg = ExecuteMsg::Claim {
             amount: Uint128::new(5),
-            stage: 1u8,
+            stage: Some(1u8),
             proof: vec![],
         };
 
@@ -955,6 +969,7 @@ mod tests {
         let msg = InstantiateMsg {
             owner: Some("owner0000".to_string()),
             cw20_token_address: "token0000".to_string(),
+            multi_stage_enabled: Some(true),
         };
 
         let env = mock_env();
@@ -969,7 +984,7 @@ mod tests {
                 .to_string(),
             expiration: None,
             start: None,
-            total_amount: None
+            total_amount: None,
         };
         let _res = execute(deps.as_mut(), env, info, msg).unwrap();
 
@@ -999,7 +1014,7 @@ mod tests {
                 .to_string(),
             expiration: None,
             start: None,
-            total_amount: None
+            total_amount: None,
         };
         let res = execute(deps.as_mut(), env, info, msg).unwrap_err();
         assert_eq!(res, ContractError::Unauthorized {});
@@ -1012,7 +1027,7 @@ mod tests {
                 .to_string(),
             expiration: None,
             start: None,
-            total_amount: None
+            total_amount: None,
         };
         let res = execute(deps.as_mut(), env, info, msg).unwrap_err();
         assert_eq!(res, ContractError::Unauthorized {});
