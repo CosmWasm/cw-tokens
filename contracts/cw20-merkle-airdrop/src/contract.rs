@@ -40,7 +40,7 @@ pub fn instantiate(
     let config = Config {
         owner: Some(owner),
         cw20_token_address: deps.api.addr_validate(&msg.cw20_token_address)?,
-        stage_enabled: msg.multi_stage_enabled,
+        multi_stage_enabled: msg.multi_stage_enabled,
     };
     CONFIG.save(deps.storage, &config)?;
 
@@ -121,7 +121,7 @@ pub fn execute_register_merkle_root(
     let cfg = CONFIG.load(deps.storage)?;
 
     let stage = LATEST_STAGE.load(deps.storage)?;
-    if cfg.stage_enabled.is_none() && stage >= 1 {
+    if cfg.multi_stage_enabled.is_none() && stage >= 1 {
         return Err(ContractError::AlreadyRegistered {});
     }
 
@@ -171,7 +171,7 @@ pub fn execute_claim(
     stage: Option<u8>,
 ) -> Result<Response, ContractError> {
     let config = CONFIG.load(deps.storage)?;
-    let stage = config.stage_enabled.and(stage).unwrap_or(1);
+    let stage = config.multi_stage_enabled.and(stage).unwrap_or(1);
 
     // airdrop begun
     let start = STAGE_START.may_load(deps.storage, stage)?;
@@ -310,7 +310,7 @@ pub fn query_config(deps: Deps) -> StdResult<ConfigResponse> {
     Ok(ConfigResponse {
         owner: cfg.owner.map(|o| o.to_string()),
         cw20_token_address: cfg.cw20_token_address.to_string(),
-        multi_stage_enabled: cfg.stage_enabled,
+        multi_stage_enabled: cfg.multi_stage_enabled,
     })
 }
 

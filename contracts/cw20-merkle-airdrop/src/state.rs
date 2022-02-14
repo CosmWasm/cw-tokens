@@ -10,7 +10,8 @@ pub struct Config {
     /// Owner If None set, contract is frozen.
     pub owner: Option<Addr>,
     pub cw20_token_address: Addr,
-    pub stage_enabled: Option<bool>,
+    /// MultiStageEnabled Some(_) when enabled, None when not.
+    pub multi_stage_enabled: Option<bool>,
 }
 
 pub const CONFIG_KEY: &str = "config";
