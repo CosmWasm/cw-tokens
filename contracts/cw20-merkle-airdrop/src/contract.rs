@@ -647,7 +647,7 @@ mod tests {
             from_binary::<TotalClaimedResponse>(
                 &query(
                     deps.as_ref(),
-                    env.clone(),
+                    env,
                     QueryMsg::TotalClaimed { stage: 2 }
                 )
                 .unwrap()
@@ -750,6 +750,114 @@ mod tests {
             .total_claimed,
             test_data.total_claimed_amount
         );
+    }
+
+    #[test]
+    fn single_stage_test() {
+        // Run test 1
+        let mut deps = mock_dependencies();
+        let test_data: MultipleData = from_slice(TEST_DATA_1_MULTI).unwrap();
+
+        let msg = InstantiateMsg {
+            owner: Some("owner0000".to_string()),
+            cw20_token_address: "token0000".to_string(),
+            multi_stage_enabled: None,
+        };
+
+        let env = mock_env();
+        let info = mock_info("addr0000", &[]);
+        let _res = instantiate(deps.as_mut(), env, info, msg).unwrap();
+
+        let env = mock_env();
+        let info = mock_info("owner0000", &[]);
+        let msg = ExecuteMsg::RegisterMerkleRoot {
+            merkle_root: test_data.root,
+            expiration: None,
+            start: None,
+            total_amount: None,
+        };
+        let _res = execute(deps.as_mut(), env, info, msg).unwrap();
+
+        // Loop accounts and claim
+        for account in test_data.accounts.iter() {
+            let msg = ExecuteMsg::Claim {
+                amount: account.amount,
+                stage: Some(1u8),
+                proof: account.proofs.clone(),
+            };
+
+            let env = mock_env();
+            let info = mock_info(account.account.as_str(), &[]);
+            let res = execute(deps.as_mut(), env.clone(), info.clone(), msg.clone()).unwrap();
+            let expected = SubMsg::new(CosmosMsg::Wasm(WasmMsg::Execute {
+                contract_addr: "token0000".to_string(),
+                funds: vec![],
+                msg: to_binary(&Cw20ExecuteMsg::Transfer {
+                    recipient: account.account.clone(),
+                    amount: account.amount,
+                })
+                .unwrap(),
+            }));
+            assert_eq!(res.messages, vec![expected]);
+
+            assert_eq!(
+                res.attributes,
+                vec![
+                    attr("action", "claim"),
+                    attr("stage", "1"),
+                    attr("address", account.account.clone()),
+                    attr("amount", account.amount)
+                ]
+            );
+        }
+
+        // try to register new stage
+        let msg = ExecuteMsg::RegisterMerkleRoot {
+            merkle_root: "test".to_string(),
+            expiration: None,
+            start: None,
+            total_amount: None,
+        };
+        let info = mock_info("owner0000", &[]);
+        let err = execute(deps.as_mut(), mock_env(), info, msg).unwrap_err();
+        assert_eq!(err, ContractError::AlreadyRegistered {})
+    }
+
+    #[test]
+    fn multi_stage_register() {
+        // Run test 1
+        let mut deps = mock_dependencies();
+        let test_data: MultipleData = from_slice(TEST_DATA_1_MULTI).unwrap();
+
+        let msg = InstantiateMsg {
+            owner: Some("owner0000".to_string()),
+            cw20_token_address: "token0000".to_string(),
+            multi_stage_enabled: Some(true),
+        };
+
+        let env = mock_env();
+        let info = mock_info("addr0000", &[]);
+        let _res = instantiate(deps.as_mut(), env, info, msg).unwrap();
+
+        let env = mock_env();
+        let info = mock_info("owner0000", &[]);
+        let msg = ExecuteMsg::RegisterMerkleRoot {
+            merkle_root: test_data.root.clone(),
+            expiration: None,
+            start: None,
+            total_amount: None,
+        };
+        let _res = execute(deps.as_mut(), env, info, msg).unwrap();
+
+        // try to register new stage
+        let msg = ExecuteMsg::RegisterMerkleRoot {
+            merkle_root: test_data.root,
+            expiration: None,
+            start: None,
+            total_amount: None,
+        };
+        let info = mock_info("owner0000", &[]);
+        execute(deps.as_mut(), mock_env(), info, msg).unwrap();
     }
 
     // Check expiration. Chain height in tests is 12345
