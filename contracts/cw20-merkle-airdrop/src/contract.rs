@@ -150,7 +150,7 @@ pub fn execute_register_merkle_root(
     }
 
     // save total airdropped amount
-    let amount = total_amount.unwrap_or(Uint128::zero());
+    let amount = total_amount.unwrap_or_else(Uint128::zero);
     STAGE_AMOUNT.save(deps.storage, stage, &amount)?;
     STAGE_AMOUNT_CLAIMED.save(deps.storage, stage, &Uint128::zero())?;
 
@@ -171,7 +171,7 @@ pub fn execute_claim(
     stage: Option<u8>,
 ) -> Result<Response, ContractError> {
     let config = CONFIG.load(deps.storage)?;
-    let stage = config.stage_enabled.and_then(|_| stage).unwrap_or(1);
+    let stage = config.stage_enabled.and(stage).unwrap_or(1);
 
     // airdrop begun
     let start = STAGE_START.may_load(deps.storage, stage)?;
@@ -609,7 +609,7 @@ mod tests {
             start: None,
             total_amount: None,
         };
-        let _res = execute(deps.as_mut(), env.clone(), info, msg).unwrap();
+        let _res = execute(deps.as_mut(), env, info, msg).unwrap();
 
         // Claim next airdrop
         let msg = ExecuteMsg::Claim {
@@ -645,12 +645,7 @@ mod tests {
         // Check total claimed on stage 2
         assert_eq!(
             from_binary::<TotalClaimedResponse>(
-                &query(
-                    deps.as_ref(),
-                    env,
-                    QueryMsg::TotalClaimed { stage: 2 }
-                )
-                .unwrap()
+                &query(deps.as_ref(), env, QueryMsg::TotalClaimed { stage: 2 }).unwrap()
             )
             .unwrap()
             .total_claimed,
@@ -668,6 +663,7 @@ mod tests {
         proofs: Vec<String>,
     }
 
+    #[allow(dead_code)]
     #[derive(Deserialize, Debug)]
     struct MultipleData {
         total_amount: Uint128,
@@ -739,12 +735,7 @@ mod tests {
         let env = mock_env();
         assert_eq!(
             from_binary::<TotalClaimedResponse>(
-                &query(
-                    deps.as_ref(),
-                    env.clone(),
-                    QueryMsg::TotalClaimed { stage: 1 }
-                )
-                .unwrap()
+                &query(deps.as_ref(), env, QueryMsg::TotalClaimed { stage: 1 }).unwrap()
             )
             .unwrap()
             .total_claimed,
@@ -965,7 +956,7 @@ mod tests {
             start: None,
             total_amount: Some(Uint128::new(10000)),
         };
-        execute(deps.as_mut(), env.clone(), info.clone(), msg).unwrap();
+        execute(deps.as_mut(), env.clone(), info, msg).unwrap();
 
         // Claim some tokens
         let msg = ExecuteMsg::Claim {
@@ -975,7 +966,7 @@ mod tests {
         };
 
         let info = mock_info(test_data.account.as_str(), &[]);
-        let res = execute(deps.as_mut(), env.clone(), info.clone(), msg.clone()).unwrap();
+        let res = execute(deps.as_mut(), env.clone(), info, msg).unwrap();
         let expected = SubMsg::new(CosmosMsg::Wasm(WasmMsg::Execute {
             contract_addr: "token0000".to_string(),
             funds: vec![],
