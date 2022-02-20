@@ -632,12 +632,7 @@ mod tests {
         // Check total claimed on stage 2
         assert_eq!(
             from_binary::<TotalClaimedResponse>(
-                &query(
-                    deps.as_ref(),
-                    env,
-                    QueryMsg::TotalClaimed { stage: 2 }
-                )
-                .unwrap()
+                &query(deps.as_ref(), env, QueryMsg::TotalClaimed { stage: 2 }).unwrap()
             )
             .unwrap()
             .total_claimed,
@@ -725,12 +720,7 @@ mod tests {
         let env = mock_env();
         assert_eq!(
             from_binary::<TotalClaimedResponse>(
-                &query(
-                    deps.as_ref(),
-                    env,
-                    QueryMsg::TotalClaimed { stage: 1 }
-                )
-                .unwrap()
+                &query(deps.as_ref(), env, QueryMsg::TotalClaimed { stage: 1 }).unwrap()
             )
             .unwrap()
             .total_claimed,

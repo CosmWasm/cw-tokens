@@ -133,9 +133,7 @@ mod tests {
     #[test]
     fn all_escrow_ids_in_order() {
         let mut storage = MockStorage::new();
-        ESCROWS
-            .save(&mut storage, "lazy", &dummy_escrow())
-            .unwrap();
+        ESCROWS.save(&mut storage, "lazy", &dummy_escrow()).unwrap();
         ESCROWS
             .save(&mut storage, "assign", &dummy_escrow())
             .unwrap();
