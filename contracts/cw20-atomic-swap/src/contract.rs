@@ -108,7 +108,7 @@ pub fn execute_create(
     };
 
     // Try to store it, fail if the id already exists (unmodifiable swaps)
-    SWAPS.update(deps.storage, &msg.id, |existing| match existing {
+    SWAPS.update(deps.storage, msg.id.clone(), |existing| match existing {
         None => Ok(swap),
         Some(_) => Err(ContractError::AlreadyExists {}),
     })?;
@@ -127,7 +127,7 @@ pub fn execute_release(
     id: String,
     preimage: String,
 ) -> Result<Response, ContractError> {
-    let swap = SWAPS.load(deps.storage, &id)?;
+    let swap = SWAPS.load(deps.storage, id.clone())?;
     if swap.is_expired(&env.block) {
         return Err(ContractError::Expired {});
     }
@@ -138,7 +138,7 @@ pub fn execute_release(
     }
 
     // Delete the swap
-    SWAPS.remove(deps.storage, &id);
+    SWAPS.remove(deps.storage, id.clone());
 
     // Send all tokens out
     let msgs = send_tokens(&swap.recipient, swap.balance)?;
@@ -151,14 +151,14 @@ pub fn execute_release(
 }
 
 pub fn execute_refund(deps: DepsMut, env: Env, id: String) -> Result<Response, ContractError> {
-    let swap = SWAPS.load(deps.storage, &id)?;
+    let swap = SWAPS.load(deps.storage, id.clone())?;
     // Anyone can try to refund, as long as the contract is expired
     if !swap.is_expired(&env.block) {
         return Err(ContractError::NotExpired {});
     }
 
     // We delete the swap
-    SWAPS.remove(deps.storage, &id);
+    SWAPS.remove(deps.storage, id.clone());
 
     let msgs = send_tokens(&swap.source, swap.balance)?;
     Ok(Response::new()
@@ -218,7 +218,7 @@ pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
 }
 
 fn query_details(deps: Deps, id: String) -> StdResult<DetailsResponse> {
-    let swap = SWAPS.load(deps.storage, &id)?;
+    let swap = SWAPS.load(deps.storage, id.clone())?;
 
     // Convert balance to human balance
     let balance_human = match swap.balance {
@@ -250,7 +250,7 @@ fn query_list(
     limit: Option<u32>,
 ) -> StdResult<ListResponse> {
     let limit = limit.unwrap_or(DEFAULT_LIMIT).min(MAX_LIMIT) as usize;
-    let start = start_after.map(|s| Bound::exclusive(s.as_bytes()));
+    let start = start_after.map(|s| Bound::exclusive(s));
 
     Ok(ListResponse {
         swaps: all_swap_ids(deps.storage, start, limit)?,
