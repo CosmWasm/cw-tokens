@@ -652,7 +652,6 @@ mod tests {
 
     #[derive(Deserialize, Debug)]
     struct MultipleData {
-        total_amount: Uint128,
         total_claimed_amount: Uint128,
         root: String,
         accounts: Vec<Proof>,
