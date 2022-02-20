@@ -538,7 +538,7 @@ mod tests {
             recipient: "recp".to_string(),
         };
         let info = mock_info("someoneelse", &[]);
-        let res = execute(deps.as_mut(), mock_env(), info, msg.clone());
+        let res = execute(deps.as_mut(), mock_env(), info, msg);
         match res {
             Err(ContractError::Unauthorized {}) => {}
             _ => panic!("Expect unauthorized error"),
