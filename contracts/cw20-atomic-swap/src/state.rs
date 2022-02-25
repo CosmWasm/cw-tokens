@@ -23,12 +23,12 @@ impl AtomicSwap {
     }
 }
 
-pub const SWAPS: Map<String, AtomicSwap> = Map::new("atomic_swap");
+pub const SWAPS: Map<&str, AtomicSwap> = Map::new("atomic_swap");
 
 /// This returns the list of ids for all active swaps
-pub fn all_swap_ids(
+pub fn all_swap_ids<'a>(
     storage: &dyn Storage,
-    start: Option<Bound<String>>,
+    start: Option<Bound<'a, &'a str>>,
     limit: usize,
 ) -> StdResult<Vec<String>> {
     SWAPS
@@ -64,15 +64,9 @@ mod tests {
     #[test]
     fn test_all_swap_ids() {
         let mut storage = MockStorage::new();
-        SWAPS
-            .save(&mut storage, "lazy".to_string(), &dummy_swap())
-            .unwrap();
-        SWAPS
-            .save(&mut storage, "assign".to_string(), &dummy_swap())
-            .unwrap();
-        SWAPS
-            .save(&mut storage, "zen".to_string(), &dummy_swap())
-            .unwrap();
+        SWAPS.save(&mut storage, "lazy", &dummy_swap()).unwrap();
+        SWAPS.save(&mut storage, "assign", &dummy_swap()).unwrap();
+        SWAPS.save(&mut storage, "zen", &dummy_swap()).unwrap();
 
         let ids = all_swap_ids(&storage, None, 10).unwrap();
         assert_eq!(3, ids.len());
