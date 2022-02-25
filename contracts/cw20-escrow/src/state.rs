@@ -133,13 +133,11 @@ mod tests {
     #[test]
     fn all_escrow_ids_in_order() {
         let mut storage = MockStorage::new();
+        ESCROWS.save(&mut storage, "lazy", &dummy_escrow()).unwrap();
         ESCROWS
-            .save(&mut storage, &"lazy", &dummy_escrow())
+            .save(&mut storage, "assign", &dummy_escrow())
             .unwrap();
-        ESCROWS
-            .save(&mut storage, &"assign", &dummy_escrow())
-            .unwrap();
-        ESCROWS.save(&mut storage, &"zen", &dummy_escrow()).unwrap();
+        ESCROWS.save(&mut storage, "zen", &dummy_escrow()).unwrap();
 
         let ids = all_escrow_ids(&storage).unwrap();
         assert_eq!(3, ids.len());

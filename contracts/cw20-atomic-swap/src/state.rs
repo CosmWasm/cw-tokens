@@ -26,9 +26,9 @@ impl AtomicSwap {
 pub const SWAPS: Map<&str, AtomicSwap> = Map::new("atomic_swap");
 
 /// This returns the list of ids for all active swaps
-pub fn all_swap_ids(
+pub fn all_swap_ids<'a>(
     storage: &dyn Storage,
-    start: Option<Bound>,
+    start: Option<Bound<'a, &'a str>>,
     limit: usize,
 ) -> StdResult<Vec<String>> {
     SWAPS

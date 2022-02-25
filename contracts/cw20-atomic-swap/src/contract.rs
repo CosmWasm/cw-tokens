@@ -250,7 +250,7 @@ fn query_list(
     limit: Option<u32>,
 ) -> StdResult<ListResponse> {
     let limit = limit.unwrap_or(DEFAULT_LIMIT).min(MAX_LIMIT) as usize;
-    let start = start_after.map(|s| Bound::exclusive(s.as_bytes()));
+    let start = start_after.as_ref().map(|s| Bound::exclusive(s.as_str()));
 
     Ok(ListResponse {
         swaps: all_swap_ids(deps.storage, start, limit)?,

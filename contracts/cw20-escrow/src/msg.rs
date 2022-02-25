@@ -5,7 +5,7 @@ use cosmwasm_std::{Addr, Api, Coin, StdResult};
 
 use cw20::{Cw20Coin, Cw20ReceiveMsg};
 
-#[derive(Serialize, Deserialize, JsonSchema)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 pub struct InstantiateMsg {}
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]

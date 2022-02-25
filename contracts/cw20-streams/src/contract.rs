@@ -250,7 +250,7 @@ fn query_list_streams(
     start: Option<u8>,
     limit: Option<u8>,
 ) -> StdResult<ListStreamsResponse> {
-    let start = start.map(Bound::inclusive_int);
+    let start = start.map(Bound::inclusive);
     let limit = limit.unwrap_or(5);
 
     let streams = STREAMS
