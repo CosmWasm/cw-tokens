@@ -37,4 +37,7 @@ pub enum ContractError {
 
     #[error("Airdrop stage {stage} begins at {start}")]
     StageNotBegun { stage: u8, start: Scheduled },
+
+    #[error("Airdrop already registered")]
+    AlreadyRegistered {},
 }

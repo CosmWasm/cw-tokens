@@ -9,6 +9,8 @@ pub struct InstantiateMsg {
     /// Owner if none set to info.sender.
     pub owner: Option<String>,
     pub cw20_token_address: String,
+    /// MultiStageEnabled Some(_) when enabled, None when not.
+    pub multi_stage_enabled: Option<bool>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
@@ -28,7 +30,8 @@ pub enum ExecuteMsg {
     },
     /// Claim does not check if contract has enough funds, owner must ensure it.
     Claim {
-        stage: u8,
+        /// Stage is Some(_) when multistage is enabled, or None
+        stage: Option<u8>,
         amount: Uint128,
         /// Proof is hex-encoded merkle proof.
         proof: Vec<String>,
@@ -52,6 +55,7 @@ pub enum QueryMsg {
 pub struct ConfigResponse {
     pub owner: Option<String>,
     pub cw20_token_address: String,
+    pub multi_stage_enabled: Option<bool>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
