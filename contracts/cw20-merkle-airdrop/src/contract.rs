@@ -346,12 +346,18 @@ pub fn query_total_claimed(deps: Deps, stage: u8) -> StdResult<TotalClaimedRespo
 
 #[cfg_attr(not(feature = "library"), entry_point)]
 pub fn migrate(deps: DepsMut, _env: Env, _msg: MigrateMsg) -> Result<Response, ContractError> {
-    let version = get_contract_version(deps.storage)?;
-    if version.contract != CONTRACT_NAME {
+    let version = CONTRACT_VERSION.to_string();
+    let storage_version = get_contract_version(deps.storage)?;
+
+    if storage_version.contract != CONTRACT_NAME {
         return Err(ContractError::CannotMigrate {
-            previous_contract: version.contract,
+            previous_contract: storage_version.contract,
         });
     }
+    if storage_version.version < version {
+        set_contract_version(deps.storage, CONTRACT_NAME, CONTRACT_VERSION)?;
+    }
+
     Ok(Response::default())
 }
 
