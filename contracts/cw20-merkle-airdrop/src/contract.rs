@@ -78,7 +78,9 @@ pub fn execute(
             proof,
         } => execute_claim(deps, env, info, stage, amount, proof),
         ExecuteMsg::Burn { stage } => execute_burn(deps, env, info, stage),
-        ExecuteMsg::Withdraw { stage, address } => execute_withdraw(deps, env, info, stage, address),
+        ExecuteMsg::Withdraw { stage, address } => {
+            execute_withdraw(deps, env, info, stage, address)
+        }
     }
 }
 
@@ -290,7 +292,7 @@ pub fn execute_withdraw(
     env: Env,
     info: MessageInfo,
     stage: u8,
-    address: String
+    address: String,
 ) -> Result<Response, ContractError> {
     // authorize owner
     let cfg = CONFIG.load(deps.storage)?;
@@ -317,14 +319,17 @@ pub fn execute_withdraw(
     // Get balance
     let balance_to_withdraw = total_amount - claimed_amount;
 
+    // Validate address
+    let recipient = deps.api.addr_validate(&address)?;
+
     // Withdraw the tokens and response
     let res = Response::new()
         .add_message(WasmMsg::Execute {
             contract_addr: cfg.cw20_token_address.to_string(),
             funds: vec![],
             msg: to_binary(&Cw20ExecuteMsg::Transfer {
-                recipient: address.clone(),
-                amount: balance_to_withdraw
+                recipient: recipient.into(),
+                amount: balance_to_withdraw,
             })?,
         })
         .add_attributes(vec![
@@ -332,7 +337,7 @@ pub fn execute_withdraw(
             attr("stage", stage.to_string()),
             attr("address", info.sender),
             attr("amount", balance_to_withdraw),
-            attr("recipient", address)
+            attr("recipient", address),
         ]);
     Ok(res)
 }
@@ -970,7 +975,10 @@ mod tests {
         execute(deps.as_mut(), env.clone(), info.clone(), msg).unwrap();
 
         // Can't withdraw not expired stage
-        let msg = ExecuteMsg::Withdraw { stage: 1u8, address: "addr0005".to_string() };
+        let msg = ExecuteMsg::Withdraw {
+            stage: 1u8,
+            address: "addr0005".to_string(),
+        };
 
         let res = execute(deps.as_mut(), env, info, msg).unwrap_err();
         assert_eq!(
@@ -1039,7 +1047,10 @@ mod tests {
         env.block.height = 12501;
 
         // Can burn after expired stage
-        let msg = ExecuteMsg::Withdraw { stage: 1u8, address: "addr0005".to_string() };
+        let msg = ExecuteMsg::Withdraw {
+            stage: 1u8,
+            address: "addr0005".to_string(),
+        };
 
         let info = mock_info("owner0000", &[]);
         let res = execute(deps.as_mut(), env, info, msg).unwrap();
@@ -1049,7 +1060,7 @@ mod tests {
             funds: vec![],
             msg: to_binary(&Cw20ExecuteMsg::Transfer {
                 amount: Uint128::new(9900),
-                recipient: "addr0005".to_string()
+                recipient: "addr0005".to_string(),
             })
             .unwrap(),
         }));
