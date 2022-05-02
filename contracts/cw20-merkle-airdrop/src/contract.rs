@@ -78,6 +78,9 @@ pub fn execute(
             proof,
         } => execute_claim(deps, env, info, stage, amount, proof),
         ExecuteMsg::Burn { stage } => execute_burn(deps, env, info, stage),
+        ExecuteMsg::Withdraw { stage, address } => {
+            execute_withdraw(deps, env, info, stage, address)
+        }
     }
 }
 
@@ -280,6 +283,61 @@ pub fn execute_burn(
             attr("stage", stage.to_string()),
             attr("address", info.sender),
             attr("amount", balance_to_burn),
+        ]);
+    Ok(res)
+}
+
+pub fn execute_withdraw(
+    deps: DepsMut,
+    env: Env,
+    info: MessageInfo,
+    stage: u8,
+    address: String,
+) -> Result<Response, ContractError> {
+    // authorize owner
+    let cfg = CONFIG.load(deps.storage)?;
+    let owner = cfg.owner.ok_or(ContractError::Unauthorized {})?;
+    if info.sender != owner {
+        return Err(ContractError::Unauthorized {});
+    }
+
+    // make sure is expired
+    let expiration = STAGE_EXPIRATION.load(deps.storage, stage)?;
+    if !expiration.is_expired(&env.block) {
+        return Err(ContractError::StageNotExpired { stage, expiration });
+    }
+
+    // Get total amount per stage and total claimed
+    let total_amount = STAGE_AMOUNT.load(deps.storage, stage)?;
+    let claimed_amount = STAGE_AMOUNT_CLAIMED.load(deps.storage, stage)?;
+
+    // impossible but who knows
+    if claimed_amount > total_amount {
+        return Err(ContractError::Unauthorized {});
+    }
+
+    // Get balance
+    let balance_to_withdraw = total_amount - claimed_amount;
+
+    // Validate address
+    let recipient = deps.api.addr_validate(&address)?;
+
+    // Withdraw the tokens and response
+    let res = Response::new()
+        .add_message(WasmMsg::Execute {
+            contract_addr: cfg.cw20_token_address.to_string(),
+            funds: vec![],
+            msg: to_binary(&Cw20ExecuteMsg::Transfer {
+                recipient: recipient.into(),
+                amount: balance_to_withdraw,
+            })?,
+        })
+        .add_attributes(vec![
+            attr("action", "withdraw"),
+            attr("stage", stage.to_string()),
+            attr("address", info.sender),
+            attr("amount", balance_to_withdraw),
+            attr("recipient", address),
         ]);
     Ok(res)
 }
@@ -887,6 +945,135 @@ mod tests {
                 attr("stage", "1"),
                 attr("address", "owner0000"),
                 attr("amount", Uint128::new(9900)),
+            ]
+        );
+    }
+
+    #[test]
+    fn cant_withdraw() {
+        let mut deps = mock_dependencies();
+
+        let msg = InstantiateMsg {
+            owner: Some("owner0000".to_string()),
+            cw20_token_address: "token0000".to_string(),
+        };
+
+        let env = mock_env();
+        let info = mock_info("addr0000", &[]);
+        let _res = instantiate(deps.as_mut(), env, info, msg).unwrap();
+
+        // can register merkle root
+        let env = mock_env();
+        let info = mock_info("owner0000", &[]);
+        let msg = ExecuteMsg::RegisterMerkleRoot {
+            merkle_root: "5d4f48f147cb6cb742b376dce5626b2a036f69faec10cd73631c791780e150fc"
+                .to_string(),
+            expiration: Some(Expiration::AtHeight(12346)),
+            start: None,
+            total_amount: Some(Uint128::new(100000)),
+        };
+        execute(deps.as_mut(), env.clone(), info.clone(), msg).unwrap();
+
+        // Can't withdraw not expired stage
+        let msg = ExecuteMsg::Withdraw {
+            stage: 1u8,
+            address: "addr0005".to_string(),
+        };
+
+        let res = execute(deps.as_mut(), env, info, msg).unwrap_err();
+        assert_eq!(
+            res,
+            ContractError::StageNotExpired {
+                stage: 1,
+                expiration: Expiration::AtHeight(12346)
+            }
+        )
+    }
+
+    #[test]
+    fn can_withdraw() {
+        let mut deps = mock_dependencies();
+        let test_data: Encoded = from_slice(TEST_DATA_1).unwrap();
+
+        let msg = InstantiateMsg {
+            owner: Some("owner0000".to_string()),
+            cw20_token_address: "token0000".to_string(),
+        };
+
+        let mut env = mock_env();
+        let info = mock_info("addr0000", &[]);
+        let _res = instantiate(deps.as_mut(), env.clone(), info, msg).unwrap();
+
+        let info = mock_info("owner0000", &[]);
+        let msg = ExecuteMsg::RegisterMerkleRoot {
+            merkle_root: test_data.root,
+            expiration: Some(Expiration::AtHeight(12500)),
+            start: None,
+            total_amount: Some(Uint128::new(10000)),
+        };
+        execute(deps.as_mut(), env.clone(), info, msg).unwrap();
+
+        // Claim some tokens
+        let msg = ExecuteMsg::Claim {
+            amount: test_data.amount,
+            stage: 1u8,
+            proof: test_data.proofs,
+        };
+
+        let info = mock_info(test_data.account.as_str(), &[]);
+        let res = execute(deps.as_mut(), env.clone(), info, msg).unwrap();
+        let expected = SubMsg::new(CosmosMsg::Wasm(WasmMsg::Execute {
+            contract_addr: "token0000".to_string(),
+            funds: vec![],
+            msg: to_binary(&Cw20ExecuteMsg::Transfer {
+                recipient: test_data.account.clone(),
+                amount: test_data.amount,
+            })
+            .unwrap(),
+        }));
+        assert_eq!(res.messages, vec![expected]);
+
+        assert_eq!(
+            res.attributes,
+            vec![
+                attr("action", "claim"),
+                attr("stage", "1"),
+                attr("address", test_data.account.clone()),
+                attr("amount", test_data.amount)
+            ]
+        );
+
+        // makes the stage expire
+        env.block.height = 12501;
+
+        // Can burn after expired stage
+        let msg = ExecuteMsg::Withdraw {
+            stage: 1u8,
+            address: "addr0005".to_string(),
+        };
+
+        let info = mock_info("owner0000", &[]);
+        let res = execute(deps.as_mut(), env, info, msg).unwrap();
+
+        let expected = SubMsg::new(CosmosMsg::Wasm(WasmMsg::Execute {
+            contract_addr: "token0000".to_string(),
+            funds: vec![],
+            msg: to_binary(&Cw20ExecuteMsg::Transfer {
+                amount: Uint128::new(9900),
+                recipient: "addr0005".to_string(),
+            })
+            .unwrap(),
+        }));
+        assert_eq!(res.messages, vec![expected]);
+
+        assert_eq!(
+            res.attributes,
+            vec![
+                attr("action", "withdraw"),
+                attr("stage", "1"),
+                attr("address", "owner0000"),
+                attr("amount", Uint128::new(9900)),
+                attr("recipient", "addr0005")
             ]
         );
     }

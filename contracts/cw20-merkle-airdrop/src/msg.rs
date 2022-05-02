@@ -35,6 +35,8 @@ pub enum ExecuteMsg {
     },
     /// Burn the remaining tokens after expire time (only owner)
     Burn { stage: u8 },
+    /// Withdraw the remaining tokens after expire time (only owner)
+    Withdraw { stage: u8, address: String },
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
