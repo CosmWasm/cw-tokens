@@ -320,8 +320,8 @@ mod tests {
         let info = mock_info("cw20", &[]);
         instantiate(deps.as_mut(), mock_env(), info.clone(), msg).unwrap();
 
-        let sender = Addr::unchecked("Alice").to_string();
-        let recipient = Addr::unchecked("Bob").to_string();
+        let sender = Addr::unchecked("alice").to_string();
+        let recipient = Addr::unchecked("bob").to_string();
         let amount = Uint128::new(200);
         let env = mock_env();
         let start_time = env.block.time.plus_seconds(100).seconds();
@@ -342,8 +342,8 @@ mod tests {
         assert_eq!(
             get_stream(deps.as_ref(), 1),
             Stream {
-                owner: Addr::unchecked("Alice"),
-                recipient: Addr::unchecked("Bob"),
+                owner: Addr::unchecked("alice"),
+                recipient: Addr::unchecked("bob"),
                 amount,
                 claimed_amount: Uint128::new(0),
                 start_time,
@@ -354,7 +354,7 @@ mod tests {
 
         // Stream has not started
         let mut info = mock_info("owner", &[]);
-        info.sender = Addr::unchecked("Bob");
+        info.sender = Addr::unchecked("bob");
         let msg = ExecuteMsg::Withdraw { id: 1 };
         let err = execute(deps.as_mut(), env, info, msg).unwrap_err();
         assert_eq!(err, ContractError::NoFundsToClaim {});
@@ -363,7 +363,7 @@ mod tests {
         let msg = ExecuteMsg::Withdraw { id: 1 };
         let mut info = mock_info("owner", &[]);
         let mut env = mock_env();
-        info.sender = Addr::unchecked("Bob");
+        info.sender = Addr::unchecked("bob");
         env.block.time = env.block.time.plus_seconds(150);
         let res = execute(deps.as_mut(), env, info, msg).unwrap();
         let msg = res.messages[0].clone().msg;
@@ -373,7 +373,7 @@ mod tests {
             CosmosMsg::Wasm(WasmMsg::Execute {
                 contract_addr: String::from("cw20"),
                 msg: to_binary(&Cw20ExecuteMsg::Transfer {
-                    recipient: String::from("Bob"),
+                    recipient: String::from("bob"),
                     amount: Uint128::new(50)
                 })
                 .unwrap(),
@@ -384,8 +384,8 @@ mod tests {
         assert_eq!(
             get_stream(deps.as_ref(), 1),
             Stream {
-                owner: Addr::unchecked("Alice"),
-                recipient: Addr::unchecked("Bob"),
+                owner: Addr::unchecked("alice"),
+                recipient: Addr::unchecked("bob"),
                 amount,
                 claimed_amount: Uint128::new(50),
                 start_time,
@@ -399,7 +399,7 @@ mod tests {
         let mut env = mock_env();
         env.block.time = env.block.time.plus_seconds(500);
         let mut info = mock_info("owner", &[]);
-        info.sender = Addr::unchecked("Bob");
+        info.sender = Addr::unchecked("bob");
         let msg = ExecuteMsg::Withdraw { id: 1 };
         let res = execute(deps.as_mut(), env, info, msg).unwrap();
         let msg = res.messages[0].clone().msg;
@@ -409,7 +409,7 @@ mod tests {
             CosmosMsg::Wasm(WasmMsg::Execute {
                 contract_addr: String::from("cw20"),
                 msg: to_binary(&Cw20ExecuteMsg::Transfer {
-                    recipient: String::from("Bob"),
+                    recipient: String::from("bob"),
                     amount: Uint128::new(150)
                 })
                 .unwrap(),
@@ -428,8 +428,8 @@ mod tests {
         let info = mock_info("cw20", &[]);
         instantiate(deps.as_mut(), mock_env(), info.clone(), msg).unwrap();
 
-        let sender = Addr::unchecked("Alice").to_string();
-        let recipient = Addr::unchecked("Bob").to_string();
+        let sender = Addr::unchecked("alice").to_string();
+        let recipient = Addr::unchecked("bob").to_string();
         let amount = Uint128::new(350);
         let env = mock_env();
         let start_time = env.block.time.plus_seconds(100).seconds();
@@ -454,7 +454,7 @@ mod tests {
             CosmosMsg::Wasm(WasmMsg::Execute {
                 contract_addr: String::from("cw20"),
                 msg: to_binary(&Cw20ExecuteMsg::Transfer {
-                    recipient: String::from("Alice"),
+                    recipient: String::from("alice"),
                     amount: Uint128::new(50)
                 })
                 .unwrap(),
@@ -465,8 +465,8 @@ mod tests {
         assert_eq!(
             get_stream(deps.as_ref(), 1),
             Stream {
-                owner: Addr::unchecked("Alice"),
-                recipient: Addr::unchecked("Bob"),
+                owner: Addr::unchecked("alice"),
+                recipient: Addr::unchecked("bob"),
                 amount: Uint128::new(300), // original amount - refund
                 claimed_amount: Uint128::new(0),
                 start_time,
@@ -484,11 +484,11 @@ mod tests {
             owner: None,
             cw20_addr: String::from("cw20"),
         };
-        let mut info = mock_info("Alice", &[]);
+        let mut info = mock_info("alice", &[]);
         instantiate(deps.as_mut(), mock_env(), info.clone(), msg).unwrap();
 
-        let sender = Addr::unchecked("Alice").to_string();
-        let recipient = Addr::unchecked("Bob").to_string();
+        let sender = Addr::unchecked("alice").to_string();
+        let recipient = Addr::unchecked("bob").to_string();
         let amount = Uint128::new(100);
         let start_time = mock_env().block.time.plus_seconds(100).seconds();
         let end_time = mock_env().block.time.plus_seconds(20).seconds();
@@ -516,11 +516,11 @@ mod tests {
             owner: None,
             cw20_addr: String::from("cw20"),
         };
-        let mut info = mock_info("Alice", &[]);
+        let mut info = mock_info("alice", &[]);
         instantiate(deps.as_mut(), mock_env(), info.clone(), msg).unwrap();
 
-        let sender = Addr::unchecked("Alice").to_string();
-        let recipient = Addr::unchecked("Bob").to_string();
+        let sender = Addr::unchecked("alice").to_string();
+        let recipient = Addr::unchecked("bob").to_string();
         let amount = Uint128::new(100);
         let start_time = mock_env().block.time.plus_seconds(100).seconds();
         let end_time = mock_env().block.time.plus_seconds(200).seconds();
@@ -548,11 +548,11 @@ mod tests {
             owner: None,
             cw20_addr: String::from("cw20"),
         };
-        let mut info = mock_info("Alice", &[]);
+        let mut info = mock_info("alice", &[]);
         instantiate(deps.as_mut(), mock_env(), info.clone(), msg).unwrap();
 
-        let sender = Addr::unchecked("Alice").to_string();
-        let recipient = Addr::unchecked("Bob").to_string();
+        let sender = Addr::unchecked("alice").to_string();
+        let recipient = Addr::unchecked("bob").to_string();
         let amount = Uint128::new(3);
         let start_time = mock_env().block.time.plus_seconds(100).seconds();
         let end_time = mock_env().block.time.plus_seconds(200).seconds();

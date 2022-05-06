@@ -634,8 +634,8 @@ mod tests {
         assert_eq!(0, res.messages.len());
 
         // Native side (offer)
-        let native_sender = String::from("A_on_X");
-        let native_rcpt = String::from("B_on_X");
+        let native_sender = String::from("a_on_x");
+        let native_rcpt = String::from("b_on_x");
         let native_coins = coins(1000, "tokens_native");
 
         // Create the Native swap offer
@@ -652,8 +652,8 @@ mod tests {
         assert_eq!(("action", "create"), res.attributes[0]);
 
         // Cw20 side (counter offer (1:1000))
-        let cw20_sender = String::from("B_on_Y");
-        let cw20_rcpt = String::from("A_on_Y");
+        let cw20_sender = String::from("b_on_y");
+        let cw20_rcpt = String::from("b_on_y");
         let cw20_coin = Cw20Coin {
             address: String::from("my_cw20_token"),
             amount: Uint128::new(1),

@@ -20,16 +20,16 @@ backtraces = ["cosmwasm-std/backtraces"]
 library = []
 
 [dependencies]
-cw-utils = { version = "0.12.1" }
-cw2 = { version = "0.12.1" }
-cw20 = { version = "0.12.1" }
-cw-controllers = { version = "0.12.1" }
-cw20-base = { version = "0.12.1", features = ["library"] }
-cosmwasm-std = { version = "1.0.0-beta5", features = ["staking"] }
-cw-storage-plus = { version = "0.12.1" }
-schemars = "0.8.1"
-serde = { version = "1.0.103", default-features = false, features = ["derive"] }
-thiserror = { version = "1.0.23" }
+cw-utils = "0.13.2"
+cw2 = "0.13.2"
+cw20 = "0.13.2"
+cw-controllers = "0.13.2"
+cw20-base = { version = "0.13.2", features = ["library"] }
+cosmwasm-std = { version = "1.0.0-beta8", features = ["staking"] }
+cw-storage-plus = "0.13.2"
+schemars = "0.8.8"
+serde = { version = "1.0.137", default-features = false, features = ["derive"] }
+thiserror = "1.0.31"
 
 [dev-dependencies]
-cosmwasm-schema = { version = "1.0.0-beta5" }
+cosmwasm-schema = "1.0.0-beta8"
