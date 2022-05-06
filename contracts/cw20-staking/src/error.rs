@@ -44,6 +44,9 @@ pub enum ContractError {
 
     #[error("Minting cannot exceed the cap")]
     CannotExceedCap {},
+
+    #[error("Duplicate initial balance addresses")]
+    DuplicateInitialBalanceAddresses {},
 }
 
 impl From<cw20_base::ContractError> for ContractError {
@@ -63,6 +66,9 @@ impl From<cw20_base::ContractError> for ContractError {
             | cw20_base::ContractError::InvalidPngHeader {}
             | cw20_base::ContractError::InvalidXmlPreamble {} => {
                 ContractError::Std(StdError::generic_err(err.to_string()))
+            }
+            cw20_base::ContractError::DuplicateInitialBalanceAddresses {} => {
+                ContractError::DuplicateInitialBalanceAddresses {}
             }
         }
     }
