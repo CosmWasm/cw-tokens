@@ -1,6 +1,6 @@
 [package]
 name = "cw20-streams"
-version = "0.13.2"
+version = "0.12.1"
 authors = ["Vernon Johnson <vtj2105@columbia.edu>"]
 edition = "2018"
 
