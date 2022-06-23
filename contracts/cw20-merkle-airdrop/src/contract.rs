@@ -588,7 +588,7 @@ mod tests {
 
         assert_eq!(
             Err(ContractError::InvalidTokenType {}),
-            instantiate(deps.as_mut(), env.clone(), info, msg)
+            instantiate(deps.as_mut(), env, info, msg)
         );
     }
 
@@ -647,7 +647,7 @@ mod tests {
 
         let _res = execute(deps.as_mut(), env.clone(), info, msg).ok();
 
-        let query_result = query(deps.as_ref(), env.clone(), QueryMsg::Config {}).unwrap();
+        let query_result = query(deps.as_ref(), env, QueryMsg::Config {}).unwrap();
         let config: ConfigResponse = from_binary(&query_result).unwrap();
         assert_eq!("owner0001", config.owner.unwrap().as_str());
         assert_eq!("ujunox", config.native_token.unwrap().as_str());
@@ -661,7 +661,7 @@ mod tests {
             new_native_token: Some("ujunox".to_string()),
         };
 
-        let res = execute(deps.as_mut(), env.clone(), info, msg).unwrap_err();
+        let res = execute(deps.as_mut(), env, info, msg).unwrap_err();
         assert_eq!(res, ContractError::InvalidTokenType {});
     }
 
@@ -1066,7 +1066,7 @@ mod tests {
 
         let env = mock_env();
         let info = mock_info(test_data.account.as_str(), &[]);
-        let res = execute(deps.as_mut(), env.clone(), info.clone(), msg.clone()).unwrap_err();
+        let res = execute(deps.as_mut(), env, info, msg).unwrap_err();
         assert_eq!(
             ContractError::InsufficientFunds {
                 balance: Uint128::zero(),
