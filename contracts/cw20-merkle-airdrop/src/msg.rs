@@ -8,7 +8,8 @@ use cw_utils::{Expiration, Scheduled};
 pub struct InstantiateMsg {
     /// Owner if none set to info.sender.
     pub owner: Option<String>,
-    pub cw20_token_address: String,
+    pub cw20_token_address: Option<String>,
+    pub native_token: Option<String>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
@@ -18,6 +19,8 @@ pub enum ExecuteMsg {
         /// NewOwner if non sent, contract gets locked. Recipients can receive airdrops
         /// but owner cannot register new stages.
         new_owner: Option<String>,
+        new_cw20_address: Option<String>,
+        new_native_token: Option<String>,
     },
     RegisterMerkleRoot {
         /// MerkleRoot is hex-encoded merkle root.
@@ -53,7 +56,8 @@ pub enum QueryMsg {
 #[serde(rename_all = "snake_case")]
 pub struct ConfigResponse {
     pub owner: Option<String>,
-    pub cw20_token_address: String,
+    pub cw20_token_address: Option<String>,
+    pub native_token: Option<String>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]

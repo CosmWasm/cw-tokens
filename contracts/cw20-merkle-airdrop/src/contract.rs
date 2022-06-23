@@ -1,11 +1,11 @@
 #[cfg(not(feature = "library"))]
 use cosmwasm_std::entry_point;
 use cosmwasm_std::{
-    attr, to_binary, Addr, Binary, Deps, DepsMut, Env, MessageInfo, Response, StdResult, Uint128,
-    WasmMsg,
+    attr, to_binary, Addr, BankMsg, Binary, Coin, CosmosMsg, Deps, DepsMut, Env, MessageInfo,
+    Response, StdResult, Uint128,
 };
 use cw2::{get_contract_version, set_contract_version};
-use cw20::Cw20ExecuteMsg;
+use cw20::{Cw20Contract, Cw20ExecuteMsg};
 use cw_utils::{Expiration, Scheduled};
 use sha2::Digest;
 use std::convert::TryInto;
@@ -30,21 +30,17 @@ pub fn instantiate(
     _env: Env,
     info: MessageInfo,
     msg: InstantiateMsg,
-) -> StdResult<Response> {
+) -> Result<Response, ContractError> {
     set_contract_version(deps.storage, CONTRACT_NAME, CONTRACT_VERSION)?;
 
     let owner = msg
         .owner
         .map_or(Ok(info.sender), |o| deps.api.addr_validate(&o))?;
 
-    let config = Config {
-        owner: Some(owner),
-        cw20_token_address: deps.api.addr_validate(&msg.cw20_token_address)?,
-    };
-    CONFIG.save(deps.storage, &config)?;
-
     let stage = 0;
     LATEST_STAGE.save(deps.storage, &stage)?;
+
+    make_config(deps, Some(owner), msg.cw20_token_address, msg.native_token)?;
 
     Ok(Response::default())
 }
@@ -57,7 +53,18 @@ pub fn execute(
     msg: ExecuteMsg,
 ) -> Result<Response, ContractError> {
     match msg {
-        ExecuteMsg::UpdateConfig { new_owner } => execute_update_config(deps, env, info, new_owner),
+        ExecuteMsg::UpdateConfig {
+            new_owner,
+            new_cw20_address,
+            new_native_token,
+        } => execute_update_config(
+            deps,
+            env,
+            info,
+            new_owner,
+            new_cw20_address,
+            new_native_token,
+        ),
         ExecuteMsg::RegisterMerkleRoot {
             merkle_root,
             expiration,
@@ -84,11 +91,36 @@ pub fn execute(
     }
 }
 
+pub fn make_config(
+    deps: DepsMut,
+    owner: Option<Addr>,
+    cw20_token_address: Option<String>,
+    native_token: Option<String>,
+) -> Result<Response, ContractError> {
+    let config: Config = match (native_token, cw20_token_address) {
+        (Some(native), None) => Ok(Config {
+            owner,
+            cw20_token_address: None,
+            native_token: Some(native),
+        }),
+        (None, Some(cw20_addr)) => Ok(Config {
+            owner,
+            cw20_token_address: Some(deps.api.addr_validate(&cw20_addr)?),
+            native_token: None,
+        }),
+        _ => Err(ContractError::InvalidTokenType {}),
+    }?;
+    CONFIG.save(deps.storage, &config)?;
+    Ok(Response::default())
+}
+
 pub fn execute_update_config(
     deps: DepsMut,
     _env: Env,
     info: MessageInfo,
     new_owner: Option<String>,
+    cw20_token_address: Option<String>,
+    native_token: Option<String>,
 ) -> Result<Response, ContractError> {
     // authorize owner
     let cfg = CONFIG.load(deps.storage)?;
@@ -103,10 +135,7 @@ pub fn execute_update_config(
         tmp_owner = Some(deps.api.addr_validate(&addr)?)
     }
 
-    CONFIG.update(deps.storage, |mut exists| -> StdResult<_> {
-        exists.owner = tmp_owner;
-        Ok(exists)
-    })?;
+    make_config(deps, tmp_owner, cw20_token_address, native_token)?;
 
     Ok(Response::new().add_attribute("action", "update_config"))
 }
@@ -220,21 +249,43 @@ pub fn execute_claim(
     claimed_amount += amount;
     STAGE_AMOUNT_CLAIMED.save(deps.storage, stage, &claimed_amount)?;
 
-    let res = Response::new()
-        .add_message(WasmMsg::Execute {
-            contract_addr: config.cw20_token_address.to_string(),
-            funds: vec![],
-            msg: to_binary(&Cw20ExecuteMsg::Transfer {
+    let message: CosmosMsg = match (config.cw20_token_address, config.native_token) {
+        (Some(cw20_addr), None) => {
+            let msg = Cw20ExecuteMsg::Transfer {
                 recipient: info.sender.to_string(),
                 amount,
-            })?,
-        })
-        .add_attributes(vec![
-            attr("action", "claim"),
-            attr("stage", stage.to_string()),
-            attr("address", info.sender),
-            attr("amount", amount),
-        ]);
+            };
+            Cw20Contract(cw20_addr)
+                .call(msg)
+                .map_err(ContractError::Std)
+        }
+        (None, Some(native)) => {
+            let balance = deps
+                .querier
+                .query_balance(env.contract.address, native.clone())?;
+            if balance.amount < amount {
+                return Err(ContractError::InsufficientFunds {
+                    balance: balance.amount,
+                    amount,
+                });
+            }
+            let msg = BankMsg::Send {
+                to_address: info.sender.to_string(),
+                amount: vec![Coin {
+                    denom: native,
+                    amount,
+                }],
+            };
+            Ok(CosmosMsg::Bank(msg))
+        }
+        _ => Err(ContractError::InvalidTokenType {}),
+    }?;
+    let res = Response::new().add_message(message).add_attributes(vec![
+        attr("action", "claim"),
+        attr("stage", stage.to_string()),
+        attr("address", info.sender),
+        attr("amount", amount),
+    ]);
     Ok(res)
 }
 
@@ -270,20 +321,41 @@ pub fn execute_burn(
     let balance_to_burn = total_amount - claimed_amount;
 
     // Burn the tokens and response
-    let res = Response::new()
-        .add_message(WasmMsg::Execute {
-            contract_addr: cfg.cw20_token_address.to_string(),
-            funds: vec![],
-            msg: to_binary(&Cw20ExecuteMsg::Burn {
+    let message: CosmosMsg = match (cfg.cw20_token_address, cfg.native_token) {
+        (Some(cw20_addr), None) => {
+            let msg = Cw20ExecuteMsg::Burn {
                 amount: balance_to_burn,
-            })?,
-        })
-        .add_attributes(vec![
-            attr("action", "burn"),
-            attr("stage", stage.to_string()),
-            attr("address", info.sender),
-            attr("amount", balance_to_burn),
-        ]);
+            };
+            Cw20Contract(cw20_addr)
+                .call(msg)
+                .map_err(ContractError::Std)
+        }
+        (None, Some(native)) => {
+            let balance = deps
+                .querier
+                .query_balance(env.contract.address, native.clone())?;
+            if balance.amount < balance_to_burn {
+                return Err(ContractError::InsufficientFunds {
+                    balance: balance.amount,
+                    amount: balance_to_burn,
+                });
+            }
+            let msg = BankMsg::Burn {
+                amount: vec![Coin {
+                    denom: native,
+                    amount: balance_to_burn,
+                }],
+            };
+            Ok(CosmosMsg::Bank(msg))
+        }
+        _ => Err(ContractError::InvalidTokenType {}),
+    }?;
+    let res = Response::new().add_message(message).add_attributes(vec![
+        attr("action", "burn"),
+        attr("stage", stage.to_string()),
+        attr("address", info.sender),
+        attr("amount", balance_to_burn),
+    ]);
     Ok(res)
 }
 
@@ -323,22 +395,44 @@ pub fn execute_withdraw(
     let recipient = deps.api.addr_validate(&address)?;
 
     // Withdraw the tokens and response
-    let res = Response::new()
-        .add_message(WasmMsg::Execute {
-            contract_addr: cfg.cw20_token_address.to_string(),
-            funds: vec![],
-            msg: to_binary(&Cw20ExecuteMsg::Transfer {
+    let message: CosmosMsg = match (cfg.cw20_token_address, cfg.native_token) {
+        (Some(cw20_addr), None) => {
+            let msg = Cw20ExecuteMsg::Transfer {
                 recipient: recipient.into(),
                 amount: balance_to_withdraw,
-            })?,
-        })
-        .add_attributes(vec![
-            attr("action", "withdraw"),
-            attr("stage", stage.to_string()),
-            attr("address", info.sender),
-            attr("amount", balance_to_withdraw),
-            attr("recipient", address),
-        ]);
+            };
+            Cw20Contract(cw20_addr)
+                .call(msg)
+                .map_err(ContractError::Std)
+        }
+        (None, Some(native)) => {
+            let balance = deps
+                .querier
+                .query_balance(env.contract.address, native.clone())?;
+            if balance.amount < balance_to_withdraw {
+                return Err(ContractError::InsufficientFunds {
+                    balance: balance.amount,
+                    amount: balance_to_withdraw,
+                });
+            }
+            let msg = BankMsg::Send {
+                to_address: recipient.into(),
+                amount: vec![Coin {
+                    denom: native,
+                    amount: balance_to_withdraw,
+                }],
+            };
+            Ok(CosmosMsg::Bank(msg))
+        }
+        _ => Err(ContractError::InvalidTokenType {}),
+    }?;
+    let res = Response::new().add_message(message).add_attributes(vec![
+        attr("action", "withdraw"),
+        attr("stage", stage.to_string()),
+        attr("address", info.sender),
+        attr("amount", balance_to_withdraw),
+        attr("recipient", address),
+    ]);
     Ok(res)
 }
 
@@ -359,7 +453,8 @@ pub fn query_config(deps: Deps) -> StdResult<ConfigResponse> {
     let cfg = CONFIG.load(deps.storage)?;
     Ok(ConfigResponse {
         owner: cfg.owner.map(|o| o.to_string()),
-        cw20_token_address: cfg.cw20_token_address.to_string(),
+        cw20_token_address: cfg.cw20_token_address.map(|o| o.to_string()),
+        native_token: cfg.native_token,
     })
 }
 
@@ -416,17 +511,20 @@ pub fn migrate(deps: DepsMut, _env: Env, _msg: MigrateMsg) -> Result<Response, C
 #[cfg(test)]
 mod tests {
     use super::*;
-    use cosmwasm_std::testing::{mock_dependencies, mock_env, mock_info};
-    use cosmwasm_std::{from_binary, from_slice, CosmosMsg, SubMsg};
+    use cosmwasm_std::testing::{
+        mock_dependencies, mock_dependencies_with_balance, mock_env, mock_info,
+    };
+    use cosmwasm_std::{from_binary, from_slice, CosmosMsg, SubMsg, WasmMsg};
     use serde::Deserialize;
 
     #[test]
-    fn proper_instantiation() {
+    fn proper_instantiation_cw20() {
         let mut deps = mock_dependencies();
 
         let msg = InstantiateMsg {
             owner: Some("owner0000".to_string()),
-            cw20_token_address: "anchor0000".to_string(),
+            cw20_token_address: Some("anchor0000".to_string()),
+            native_token: None,
         };
 
         let env = mock_env();
@@ -439,11 +537,59 @@ mod tests {
         let res = query(deps.as_ref(), env.clone(), QueryMsg::Config {}).unwrap();
         let config: ConfigResponse = from_binary(&res).unwrap();
         assert_eq!("owner0000", config.owner.unwrap().as_str());
-        assert_eq!("anchor0000", config.cw20_token_address.as_str());
+        assert_eq!("anchor0000", config.cw20_token_address.unwrap().as_str());
+        assert_eq!(None, config.native_token);
 
         let res = query(deps.as_ref(), env, QueryMsg::LatestStage {}).unwrap();
         let latest_stage: LatestStageResponse = from_binary(&res).unwrap();
         assert_eq!(0u8, latest_stage.latest_stage);
+    }
+
+    #[test]
+    fn proper_instantiation_native() {
+        let mut deps = mock_dependencies();
+
+        let msg = InstantiateMsg {
+            owner: Some("owner0000".to_string()),
+            cw20_token_address: None,
+            native_token: Some(String::from("ujunox")),
+        };
+
+        let env = mock_env();
+        let info = mock_info("addr0000", &[]);
+
+        // we can just call .unwrap() to assert this was a success
+        let _res = instantiate(deps.as_mut(), env.clone(), info, msg).unwrap();
+
+        // it worked, let's query the state
+        let res = query(deps.as_ref(), env.clone(), QueryMsg::Config {}).unwrap();
+        let config: ConfigResponse = from_binary(&res).unwrap();
+        assert_eq!("owner0000", config.owner.unwrap().as_str());
+        assert_eq!("ujunox", config.native_token.unwrap().as_str());
+        assert_eq!(None, config.cw20_token_address);
+
+        let res = query(deps.as_ref(), env, QueryMsg::LatestStage {}).unwrap();
+        let latest_stage: LatestStageResponse = from_binary(&res).unwrap();
+        assert_eq!(0u8, latest_stage.latest_stage);
+    }
+
+    #[test]
+    fn failed_instantiation_native_and_cw20() {
+        let mut deps = mock_dependencies();
+
+        let msg = InstantiateMsg {
+            owner: Some("owner0000".to_string()),
+            cw20_token_address: Some("anchor0000".to_string()),
+            native_token: Some(String::from("ujunox")),
+        };
+
+        let env = mock_env();
+        let info = mock_info("addr0000", &[]);
+
+        assert_eq!(
+            Err(ContractError::InvalidTokenType {}),
+            instantiate(deps.as_mut(), env, info, msg)
+        );
     }
 
     #[test]
@@ -452,7 +598,8 @@ mod tests {
 
         let msg = InstantiateMsg {
             owner: None,
-            cw20_token_address: "anchor0000".to_string(),
+            cw20_token_address: Some("anchor0000".to_string()),
+            native_token: None,
         };
 
         let env = mock_env();
@@ -464,6 +611,8 @@ mod tests {
         let info = mock_info("owner0000", &[]);
         let msg = ExecuteMsg::UpdateConfig {
             new_owner: Some("owner0001".to_string()),
+            new_cw20_address: Some("cw20_0000".to_string()),
+            new_native_token: None,
         };
 
         let res = execute(deps.as_mut(), env.clone(), info, msg).unwrap();
@@ -473,14 +622,47 @@ mod tests {
         let res = query(deps.as_ref(), env, QueryMsg::Config {}).unwrap();
         let config: ConfigResponse = from_binary(&res).unwrap();
         assert_eq!("owner0001", config.owner.unwrap().as_str());
+        assert_eq!("cw20_0000", config.cw20_token_address.unwrap().as_str());
 
         // Unauthorized err
         let env = mock_env();
         let info = mock_info("owner0000", &[]);
-        let msg = ExecuteMsg::UpdateConfig { new_owner: None };
+        let msg = ExecuteMsg::UpdateConfig {
+            new_owner: None,
+            new_cw20_address: Some("cw20_0001".to_string()),
+            new_native_token: None,
+        };
 
         let res = execute(deps.as_mut(), env, info, msg).unwrap_err();
         assert_eq!(res, ContractError::Unauthorized {});
+
+        //update with native token
+        let env = mock_env();
+        let info = mock_info("owner0001", &[]);
+        let msg = ExecuteMsg::UpdateConfig {
+            new_owner: Some("owner0001".to_string()),
+            new_cw20_address: None,
+            new_native_token: Some("ujunox".to_string()),
+        };
+
+        let _res = execute(deps.as_mut(), env.clone(), info, msg).ok();
+
+        let query_result = query(deps.as_ref(), env, QueryMsg::Config {}).unwrap();
+        let config: ConfigResponse = from_binary(&query_result).unwrap();
+        assert_eq!("owner0001", config.owner.unwrap().as_str());
+        assert_eq!("ujunox", config.native_token.unwrap().as_str());
+
+        //update cw20_address and native token together
+        let env = mock_env();
+        let info = mock_info("owner0001", &[]);
+        let msg = ExecuteMsg::UpdateConfig {
+            new_owner: Some("owner0001".to_string()),
+            new_cw20_address: Some("cw20_0001".to_string()),
+            new_native_token: Some("ujunox".to_string()),
+        };
+
+        let res = execute(deps.as_mut(), env, info, msg).unwrap_err();
+        assert_eq!(res, ContractError::InvalidTokenType {});
     }
 
     #[test]
@@ -489,7 +671,8 @@ mod tests {
 
         let msg = InstantiateMsg {
             owner: Some("owner0000".to_string()),
-            cw20_token_address: "anchor0000".to_string(),
+            cw20_token_address: Some("anchor0000".to_string()),
+            native_token: None,
         };
 
         let env = mock_env();
@@ -515,9 +698,9 @@ mod tests {
                 attr("stage", "1"),
                 attr(
                     "merkle_root",
-                    "634de21cde1044f41d90373733b0f0fb1c1c71f9652b905cdf159e73c4cf0d37"
+                    "634de21cde1044f41d90373733b0f0fb1c1c71f9652b905cdf159e73c4cf0d37",
                 ),
-                attr("total_amount", "0")
+                attr("total_amount", "0"),
             ]
         );
 
@@ -552,14 +735,15 @@ mod tests {
     }
 
     #[test]
-    fn claim() {
+    fn claim_cw20() {
         // Run test 1
         let mut deps = mock_dependencies();
         let test_data: Encoded = from_slice(TEST_DATA_1).unwrap();
 
         let msg = InstantiateMsg {
             owner: Some("owner0000".to_string()),
-            cw20_token_address: "token0000".to_string(),
+            cw20_token_address: Some("token0000".to_string()),
+            native_token: None,
         };
 
         let env = mock_env();
@@ -602,7 +786,7 @@ mod tests {
                 attr("action", "claim"),
                 attr("stage", "1"),
                 attr("address", test_data.account.clone()),
-                attr("amount", test_data.amount)
+                attr("amount", test_data.amount),
             ]
         );
 
@@ -612,7 +796,7 @@ mod tests {
                 &query(
                     deps.as_ref(),
                     env.clone(),
-                    QueryMsg::TotalClaimed { stage: 1 }
+                    QueryMsg::TotalClaimed { stage: 1 },
                 )
                 .unwrap()
             )
@@ -629,8 +813,8 @@ mod tests {
                     env.clone(),
                     QueryMsg::IsClaimed {
                         stage: 1,
-                        address: test_data.account
-                    }
+                        address: test_data.account,
+                    },
                 )
                 .unwrap()
             )
@@ -683,7 +867,7 @@ mod tests {
                 attr("action", "claim"),
                 attr("stage", "2"),
                 attr("address", test_data.account),
-                attr("amount", test_data.amount)
+                attr("amount", test_data.amount),
             ]
         );
 
@@ -695,6 +879,200 @@ mod tests {
             .unwrap()
             .total_claimed,
             test_data.amount
+        );
+    }
+
+    #[test]
+    fn claim_native() {
+        // Run test 1
+        let mut deps = mock_dependencies_with_balance(&[Coin {
+            denom: "ujunox".to_string(),
+            amount: Uint128::new(1234567),
+        }]);
+        let test_data: Encoded = from_slice(TEST_DATA_1).unwrap();
+
+        let msg = InstantiateMsg {
+            owner: Some("owner0000".to_string()),
+            cw20_token_address: None,
+            native_token: Some("ujunox".to_string()),
+        };
+
+        let env = mock_env();
+        let info = mock_info("addr0000", &[]);
+        let _res = instantiate(deps.as_mut(), env, info, msg).unwrap();
+
+        let env = mock_env();
+        let info = mock_info("owner0000", &[]);
+        let msg = ExecuteMsg::RegisterMerkleRoot {
+            merkle_root: test_data.root,
+            expiration: None,
+            start: None,
+            total_amount: None,
+        };
+        let _res = execute(deps.as_mut(), env, info, msg).unwrap();
+
+        let msg = ExecuteMsg::Claim {
+            amount: test_data.amount,
+            stage: 1u8,
+            proof: test_data.proofs,
+        };
+
+        let env = mock_env();
+        let info = mock_info(test_data.account.as_str(), &[]);
+        let res = execute(deps.as_mut(), env.clone(), info.clone(), msg.clone()).unwrap();
+        let expected = SubMsg::new(CosmosMsg::Bank(BankMsg::Send {
+            to_address: test_data.account.clone(),
+            amount: vec![Coin {
+                denom: "ujunox".to_string(),
+                amount: test_data.amount,
+            }],
+        }));
+        assert_eq!(res.messages, vec![expected]);
+
+        assert_eq!(
+            res.attributes,
+            vec![
+                attr("action", "claim"),
+                attr("stage", "1"),
+                attr("address", test_data.account.clone()),
+                attr("amount", test_data.amount),
+            ]
+        );
+
+        // Check total claimed on stage 1
+        assert_eq!(
+            from_binary::<TotalClaimedResponse>(
+                &query(
+                    deps.as_ref(),
+                    env.clone(),
+                    QueryMsg::TotalClaimed { stage: 1 },
+                )
+                .unwrap()
+            )
+            .unwrap()
+            .total_claimed,
+            test_data.amount
+        );
+
+        // Check address is claimed
+        assert!(
+            from_binary::<IsClaimedResponse>(
+                &query(
+                    deps.as_ref(),
+                    env.clone(),
+                    QueryMsg::IsClaimed {
+                        stage: 1,
+                        address: test_data.account,
+                    },
+                )
+                .unwrap()
+            )
+            .unwrap()
+            .is_claimed
+        );
+
+        // check error on double claim
+        let res = execute(deps.as_mut(), env, info, msg).unwrap_err();
+        assert_eq!(res, ContractError::Claimed {});
+
+        // Second test
+        let test_data: Encoded = from_slice(TEST_DATA_2).unwrap();
+
+        // register new drop
+        let env = mock_env();
+        let info = mock_info("owner0000", &[]);
+        let msg = ExecuteMsg::RegisterMerkleRoot {
+            merkle_root: test_data.root,
+            expiration: None,
+            start: None,
+            total_amount: None,
+        };
+        let _res = execute(deps.as_mut(), env, info, msg).unwrap();
+
+        // Claim next airdrop
+        let msg = ExecuteMsg::Claim {
+            amount: test_data.amount,
+            stage: 2u8,
+            proof: test_data.proofs,
+        };
+
+        let env = mock_env();
+        let info = mock_info(test_data.account.as_str(), &[]);
+        let res = execute(deps.as_mut(), env.clone(), info, msg).unwrap();
+        let expected = SubMsg::new(CosmosMsg::Bank(BankMsg::Send {
+            to_address: test_data.account.clone(),
+            amount: vec![Coin {
+                denom: "ujunox".to_string(),
+                amount: test_data.amount,
+            }],
+        }));
+        assert_eq!(res.messages, vec![expected]);
+
+        assert_eq!(
+            res.attributes,
+            vec![
+                attr("action", "claim"),
+                attr("stage", "2"),
+                attr("address", test_data.account),
+                attr("amount", test_data.amount),
+            ]
+        );
+
+        // Check total claimed on stage 2
+        assert_eq!(
+            from_binary::<TotalClaimedResponse>(
+                &query(deps.as_ref(), env, QueryMsg::TotalClaimed { stage: 2 }).unwrap()
+            )
+            .unwrap()
+            .total_claimed,
+            test_data.amount
+        );
+    }
+
+    #[test]
+    fn claim_native_insufficient_funds() {
+        // Run test 1
+        let mut deps = mock_dependencies_with_balance(&[Coin {
+            denom: "ujunox".to_string(),
+            amount: Uint128::zero(),
+        }]);
+        let test_data: Encoded = from_slice(TEST_DATA_1).unwrap();
+
+        let msg = InstantiateMsg {
+            owner: Some("owner0000".to_string()),
+            cw20_token_address: None,
+            native_token: Some("ujunox".to_string()),
+        };
+
+        let env = mock_env();
+        let info = mock_info("addr0000", &[]);
+        let _res = instantiate(deps.as_mut(), env, info, msg).unwrap();
+
+        let env = mock_env();
+        let info = mock_info("owner0000", &[]);
+        let msg = ExecuteMsg::RegisterMerkleRoot {
+            merkle_root: test_data.root,
+            expiration: None,
+            start: None,
+            total_amount: None,
+        };
+        let _res = execute(deps.as_mut(), env, info, msg).unwrap();
+
+        let msg = ExecuteMsg::Claim {
+            amount: test_data.amount,
+            stage: 1u8,
+            proof: test_data.proofs,
+        };
+
+        let env = mock_env();
+        let info = mock_info(test_data.account.as_str(), &[]);
+        let res = execute(deps.as_mut(), env, info, msg).unwrap_err();
+        assert_eq!(
+            ContractError::InsufficientFunds {
+                balance: Uint128::zero(),
+                amount: test_data.amount
+            },
+            res
         );
     }
 
@@ -716,14 +1094,15 @@ mod tests {
     }
 
     #[test]
-    fn multiple_claim() {
+    fn multiple_claim_cw20() {
         // Run test 1
         let mut deps = mock_dependencies();
         let test_data: MultipleData = from_slice(TEST_DATA_1_MULTI).unwrap();
 
         let msg = InstantiateMsg {
             owner: Some("owner0000".to_string()),
-            cw20_token_address: "token0000".to_string(),
+            cw20_token_address: Some("token0000".to_string()),
+            native_token: None,
         };
 
         let env = mock_env();
@@ -768,7 +1147,79 @@ mod tests {
                     attr("action", "claim"),
                     attr("stage", "1"),
                     attr("address", account.account.clone()),
-                    attr("amount", account.amount)
+                    attr("amount", account.amount),
+                ]
+            );
+        }
+
+        // Check total claimed on stage 1
+        let env = mock_env();
+        assert_eq!(
+            from_binary::<TotalClaimedResponse>(
+                &query(deps.as_ref(), env, QueryMsg::TotalClaimed { stage: 1 }).unwrap()
+            )
+            .unwrap()
+            .total_claimed,
+            test_data.total_claimed_amount
+        );
+    }
+
+    #[test]
+    fn multiple_claim_native() {
+        // Run test 1
+        let mut deps = mock_dependencies_with_balance(&[Coin {
+            denom: "ujunox".to_string(),
+            amount: Uint128::new(1234567),
+        }]);
+        let test_data: MultipleData = from_slice(TEST_DATA_1_MULTI).unwrap();
+
+        let msg = InstantiateMsg {
+            owner: Some("owner0000".to_string()),
+            cw20_token_address: None,
+            native_token: Some("ujunox".to_string()),
+        };
+
+        let env = mock_env();
+        let info = mock_info("addr0000", &[]);
+        let _res = instantiate(deps.as_mut(), env, info, msg).unwrap();
+
+        let env = mock_env();
+        let info = mock_info("owner0000", &[]);
+        let msg = ExecuteMsg::RegisterMerkleRoot {
+            merkle_root: test_data.root,
+            expiration: None,
+            start: None,
+            total_amount: None,
+        };
+        let _res = execute(deps.as_mut(), env, info, msg).unwrap();
+
+        // Loop accounts and claim
+        for account in test_data.accounts.iter() {
+            let msg = ExecuteMsg::Claim {
+                amount: account.amount,
+                stage: 1u8,
+                proof: account.proofs.clone(),
+            };
+
+            let env = mock_env();
+            let info = mock_info(account.account.as_str(), &[]);
+            let res = execute(deps.as_mut(), env.clone(), info.clone(), msg.clone()).unwrap();
+            let expected = SubMsg::new(CosmosMsg::Bank(BankMsg::Send {
+                to_address: account.account.clone(),
+                amount: vec![Coin {
+                    denom: "ujunox".to_string(),
+                    amount: account.amount,
+                }],
+            }));
+            assert_eq!(res.messages, vec![expected]);
+
+            assert_eq!(
+                res.attributes,
+                vec![
+                    attr("action", "claim"),
+                    attr("stage", "1"),
+                    attr("address", account.account.clone()),
+                    attr("amount", account.amount),
                 ]
             );
         }
@@ -792,7 +1243,8 @@ mod tests {
 
         let msg = InstantiateMsg {
             owner: Some("owner0000".to_string()),
-            cw20_token_address: "token0000".to_string(),
+            cw20_token_address: Some("token0000".to_string()),
+            native_token: None,
         };
 
         let env = mock_env();
@@ -823,7 +1275,7 @@ mod tests {
             res,
             ContractError::StageExpired {
                 stage: 1,
-                expiration: Expiration::AtHeight(100)
+                expiration: Expiration::AtHeight(100),
             }
         )
     }
@@ -834,7 +1286,8 @@ mod tests {
 
         let msg = InstantiateMsg {
             owner: Some("owner0000".to_string()),
-            cw20_token_address: "token0000".to_string(),
+            cw20_token_address: Some("token0000".to_string()),
+            native_token: None,
         };
 
         let env = mock_env();
@@ -861,19 +1314,20 @@ mod tests {
             res,
             ContractError::StageNotExpired {
                 stage: 1,
-                expiration: Expiration::AtHeight(12346)
+                expiration: Expiration::AtHeight(12346),
             }
         )
     }
 
     #[test]
-    fn can_burn() {
+    fn can_burn_cw20() {
         let mut deps = mock_dependencies();
         let test_data: Encoded = from_slice(TEST_DATA_1).unwrap();
 
         let msg = InstantiateMsg {
             owner: Some("owner0000".to_string()),
-            cw20_token_address: "token0000".to_string(),
+            cw20_token_address: Some("token0000".to_string()),
+            native_token: None,
         };
 
         let mut env = mock_env();
@@ -915,7 +1369,7 @@ mod tests {
                 attr("action", "claim"),
                 attr("stage", "1"),
                 attr("address", test_data.account.clone()),
-                attr("amount", test_data.amount)
+                attr("amount", test_data.amount),
             ]
         );
 
@@ -950,12 +1404,97 @@ mod tests {
     }
 
     #[test]
+    fn can_burn_native() {
+        let mut deps = mock_dependencies_with_balance(&[Coin {
+            denom: "ujunox".to_string(),
+            amount: Uint128::new(10000),
+        }]);
+
+        let test_data: Encoded = from_slice(TEST_DATA_1).unwrap();
+
+        let msg = InstantiateMsg {
+            owner: Some("owner0000".to_string()),
+            cw20_token_address: None,
+            native_token: Some("ujunox".to_string()),
+        };
+
+        let mut env = mock_env();
+        let info = mock_info("addr0000", &[]);
+        let _res = instantiate(deps.as_mut(), env.clone(), info, msg).unwrap();
+
+        let info = mock_info("owner0000", &[]);
+        let msg = ExecuteMsg::RegisterMerkleRoot {
+            merkle_root: test_data.root,
+            expiration: Some(Expiration::AtHeight(12500)),
+            start: None,
+            total_amount: Some(Uint128::new(10000)),
+        };
+        execute(deps.as_mut(), env.clone(), info, msg).unwrap();
+
+        // Claim some tokens
+        let msg = ExecuteMsg::Claim {
+            amount: test_data.amount,
+            stage: 1u8,
+            proof: test_data.proofs,
+        };
+
+        let info = mock_info(test_data.account.as_str(), &[]);
+        let res = execute(deps.as_mut(), env.clone(), info, msg).unwrap();
+        let expected = SubMsg::new(CosmosMsg::Bank(BankMsg::Send {
+            to_address: test_data.account.clone(),
+            amount: vec![Coin {
+                denom: "ujunox".to_string(),
+                amount: test_data.amount,
+            }],
+        }));
+        assert_eq!(res.messages, vec![expected]);
+
+        assert_eq!(
+            res.attributes,
+            vec![
+                attr("action", "claim"),
+                attr("stage", "1"),
+                attr("address", test_data.account.clone()),
+                attr("amount", test_data.amount),
+            ]
+        );
+
+        // makes the stage expire
+        env.block.height = 12501;
+
+        // Can burn after expired stage
+        let msg = ExecuteMsg::Burn { stage: 1u8 };
+
+        let info = mock_info("owner0000", &[]);
+        let res = execute(deps.as_mut(), env, info, msg).unwrap();
+
+        let expected = SubMsg::new(CosmosMsg::Bank(BankMsg::Burn {
+            amount: vec![Coin {
+                denom: "ujunox".to_string(),
+                amount: Uint128::new(9900),
+            }],
+        }));
+        assert_eq!(res.messages, vec![expected]);
+
+        assert_eq!(
+            res.attributes,
+            vec![
+                attr("action", "burn"),
+                attr("stage", "1"),
+                attr("address", "owner0000"),
+                attr("amount", Uint128::new(9900)),
+            ]
+        );
+    }
+
+    #[test]
     fn cant_withdraw() {
         let mut deps = mock_dependencies();
 
         let msg = InstantiateMsg {
             owner: Some("owner0000".to_string()),
-            cw20_token_address: "token0000".to_string(),
+            cw20_token_address: Some("token0000".to_string()),
+            native_token: None,
         };
 
         let env = mock_env();
@@ -985,19 +1524,20 @@ mod tests {
             res,
             ContractError::StageNotExpired {
                 stage: 1,
-                expiration: Expiration::AtHeight(12346)
+                expiration: Expiration::AtHeight(12346),
             }
         )
     }
 
     #[test]
-    fn can_withdraw() {
+    fn can_withdraw_cw20() {
         let mut deps = mock_dependencies();
         let test_data: Encoded = from_slice(TEST_DATA_1).unwrap();
 
         let msg = InstantiateMsg {
             owner: Some("owner0000".to_string()),
-            cw20_token_address: "token0000".to_string(),
+            cw20_token_address: Some("token0000".to_string()),
+            native_token: None,
         };
 
         let mut env = mock_env();
@@ -1039,14 +1579,14 @@ mod tests {
                 attr("action", "claim"),
                 attr("stage", "1"),
                 attr("address", test_data.account.clone()),
-                attr("amount", test_data.amount)
+                attr("amount", test_data.amount),
             ]
         );
 
         // makes the stage expire
         env.block.height = 12501;
 
-        // Can burn after expired stage
+        // Can withdraw after expired stage
         let msg = ExecuteMsg::Withdraw {
             stage: 1u8,
             address: "addr0005".to_string(),
@@ -1073,7 +1613,95 @@ mod tests {
                 attr("stage", "1"),
                 attr("address", "owner0000"),
                 attr("amount", Uint128::new(9900)),
-                attr("recipient", "addr0005")
+                attr("recipient", "addr0005"),
+            ]
+        );
+    }
+
+    #[test]
+    fn can_withdraw_native() {
+        let mut deps = mock_dependencies_with_balance(&[Coin {
+            denom: "ujunox".to_string(),
+            amount: Uint128::new(10000),
+        }]);
+        let test_data: Encoded = from_slice(TEST_DATA_1).unwrap();
+
+        let msg = InstantiateMsg {
+            owner: Some("owner0000".to_string()),
+            cw20_token_address: None,
+            native_token: Some("ujunox".to_string()),
+        };
+
+        let mut env = mock_env();
+        let info = mock_info("addr0000", &[]);
+        let _res = instantiate(deps.as_mut(), env.clone(), info, msg).unwrap();
+
+        let info = mock_info("owner0000", &[]);
+        let msg = ExecuteMsg::RegisterMerkleRoot {
+            merkle_root: test_data.root,
+            expiration: Some(Expiration::AtHeight(12500)),
+            start: None,
+            total_amount: Some(Uint128::new(10000)),
+        };
+        execute(deps.as_mut(), env.clone(), info, msg).unwrap();
+
+        // Claim some tokens
+        let msg = ExecuteMsg::Claim {
+            amount: test_data.amount,
+            stage: 1u8,
+            proof: test_data.proofs,
+        };
+
+        let info = mock_info(test_data.account.as_str(), &[]);
+        let res = execute(deps.as_mut(), env.clone(), info, msg).unwrap();
+        let expected = SubMsg::new(CosmosMsg::Bank(BankMsg::Send {
+            to_address: test_data.account.clone(),
+            amount: vec![Coin {
+                denom: "ujunox".to_string(),
+                amount: test_data.amount,
+            }],
+        }));
+        assert_eq!(res.messages, vec![expected]);
+
+        assert_eq!(
+            res.attributes,
+            vec![
+                attr("action", "claim"),
+                attr("stage", "1"),
+                attr("address", test_data.account.clone()),
+                attr("amount", test_data.amount),
+            ]
+        );
+
+        // makes the stage expire
+        env.block.height = 12501;
+
+        // Can withdraw after expired stage
+        let msg = ExecuteMsg::Withdraw {
+            stage: 1u8,
+            address: "addr0005".to_string(),
+        };
+
+        let info = mock_info("owner0000", &[]);
+        let res = execute(deps.as_mut(), env, info, msg).unwrap();
+
+        let expected = SubMsg::new(CosmosMsg::Bank(BankMsg::Send {
+            to_address: "addr0005".to_string(),
+            amount: vec![Coin {
+                denom: "ujunox".to_string(),
+                amount: Uint128::new(9900),
+            }],
+        }));
+        assert_eq!(res.messages, vec![expected]);
+
+        assert_eq!(
+            res.attributes,
+            vec![
+                attr("action", "withdraw"),
+                attr("stage", "1"),
+                attr("address", "owner0000"),
+                attr("amount", Uint128::new(9900)),
+                attr("recipient", "addr0005"),
             ]
         );
     }
@@ -1084,7 +1712,8 @@ mod tests {
 
         let msg = InstantiateMsg {
             owner: Some("owner0000".to_string()),
-            cw20_token_address: "token0000".to_string(),
+            cw20_token_address: Some("token0000".to_string()),
+            native_token: None,
         };
 
         let env = mock_env();
@@ -1103,7 +1732,7 @@ mod tests {
         };
         execute(deps.as_mut(), env.clone(), info.clone(), msg).unwrap();
 
-        // can't claim expired
+        // can't claim stage has not started yet
         let msg = ExecuteMsg::Claim {
             amount: Uint128::new(5),
             stage: 1u8,
@@ -1115,7 +1744,7 @@ mod tests {
             res,
             ContractError::StageNotBegun {
                 stage: 1,
-                start: Scheduled::AtHeight(200_000)
+                start: Scheduled::AtHeight(200_000),
             }
         )
     }
@@ -1126,7 +1755,8 @@ mod tests {
 
         let msg = InstantiateMsg {
             owner: Some("owner0000".to_string()),
-            cw20_token_address: "token0000".to_string(),
+            cw20_token_address: Some("token0000".to_string()),
+            native_token: None,
         };
 
         let env = mock_env();
@@ -1150,6 +1780,8 @@ mod tests {
         let info = mock_info("owner0000", &[]);
         let msg = ExecuteMsg::UpdateConfig {
             new_owner: Some("owner0001".to_string()),
+            new_cw20_address: Some("cw20_0001".to_string()),
+            new_native_token: None,
         };
 
         let res = execute(deps.as_mut(), env, info, msg).unwrap();
@@ -1158,7 +1790,11 @@ mod tests {
         // freeze contract
         let env = mock_env();
         let info = mock_info("owner0001", &[]);
-        let msg = ExecuteMsg::UpdateConfig { new_owner: None };
+        let msg = ExecuteMsg::UpdateConfig {
+            new_owner: None,
+            new_cw20_address: Some("cw20_0001".to_string()),
+            new_native_token: None,
+        };
 
         let res = execute(deps.as_mut(), env, info, msg).unwrap();
         assert_eq!(0, res.messages.len());
@@ -1179,12 +1815,10 @@ mod tests {
         // cannot update config
         let env = mock_env();
         let info = mock_info("owner0001", &[]);
-        let msg = ExecuteMsg::RegisterMerkleRoot {
-            merkle_root: "ebaa83c7eaf7467c378d2f37b5e46752d904d2d17acd380b24b02e3b398b3e5a"
-                .to_string(),
-            expiration: None,
-            start: None,
-            total_amount: None,
+        let msg = ExecuteMsg::UpdateConfig {
+            new_owner: Some("owner0001".to_string()),
+            new_cw20_address: Some("cw20_0001".to_string()),
+            new_native_token: None,
         };
         let res = execute(deps.as_mut(), env, info, msg).unwrap_err();
         assert_eq!(res, ContractError::Unauthorized {});

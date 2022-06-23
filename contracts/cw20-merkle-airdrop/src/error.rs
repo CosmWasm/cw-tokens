@@ -1,4 +1,4 @@
-use cosmwasm_std::StdError;
+use cosmwasm_std::{StdError, Uint128};
 use cw_utils::{Expiration, Scheduled};
 use hex::FromHexError;
 use thiserror::Error;
@@ -25,6 +25,12 @@ pub enum ContractError {
 
     #[error("Verification failed")]
     VerificationFailed {},
+
+    #[error("Invalid token type")]
+    InvalidTokenType {},
+
+    #[error("Insufficient Funds: Contract balance: {balance} does not cover the required amount: {amount}")]
+    InsufficientFunds { balance: Uint128, amount: Uint128 },
 
     #[error("Cannot migrate from different contract type: {previous_contract}")]
     CannotMigrate { previous_contract: String },
