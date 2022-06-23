@@ -715,7 +715,7 @@ mod tests {
                 stage: latest_stage.latest_stage,
             },
         )
-            .unwrap();
+        .unwrap();
         let merkle_root: MerkleRootResponse = from_binary(&res).unwrap();
         assert_eq!(
             "634de21cde1044f41d90373733b0f0fb1c1c71f9652b905cdf159e73c4cf0d37".to_string(),
@@ -776,7 +776,7 @@ mod tests {
                 recipient: test_data.account.clone(),
                 amount: test_data.amount,
             })
-                .unwrap(),
+            .unwrap(),
         }));
         assert_eq!(res.messages, vec![expected]);
 
@@ -798,10 +798,10 @@ mod tests {
                     env.clone(),
                     QueryMsg::TotalClaimed { stage: 1 },
                 )
-                    .unwrap()
-            )
                 .unwrap()
-                .total_claimed,
+            )
+            .unwrap()
+            .total_claimed,
             test_data.amount
         );
 
@@ -816,10 +816,10 @@ mod tests {
                         address: test_data.account,
                     },
                 )
-                    .unwrap()
-            )
                 .unwrap()
-                .is_claimed
+            )
+            .unwrap()
+            .is_claimed
         );
 
         // check error on double claim
@@ -857,7 +857,7 @@ mod tests {
                 recipient: test_data.account.clone(),
                 amount: test_data.amount,
             })
-                .unwrap(),
+            .unwrap(),
         }));
         assert_eq!(res.messages, vec![expected]);
 
@@ -876,8 +876,8 @@ mod tests {
             from_binary::<TotalClaimedResponse>(
                 &query(deps.as_ref(), env, QueryMsg::TotalClaimed { stage: 2 }).unwrap()
             )
-                .unwrap()
-                .total_claimed,
+            .unwrap()
+            .total_claimed,
             test_data.amount
         );
     }
@@ -947,10 +947,10 @@ mod tests {
                     env.clone(),
                     QueryMsg::TotalClaimed { stage: 1 },
                 )
-                    .unwrap()
-            )
                 .unwrap()
-                .total_claimed,
+            )
+            .unwrap()
+            .total_claimed,
             test_data.amount
         );
 
@@ -965,10 +965,10 @@ mod tests {
                         address: test_data.account,
                     },
                 )
-                    .unwrap()
-            )
                 .unwrap()
-                .is_claimed
+            )
+            .unwrap()
+            .is_claimed
         );
 
         // check error on double claim
@@ -1023,8 +1023,8 @@ mod tests {
             from_binary::<TotalClaimedResponse>(
                 &query(deps.as_ref(), env, QueryMsg::TotalClaimed { stage: 2 }).unwrap()
             )
-                .unwrap()
-                .total_claimed,
+            .unwrap()
+            .total_claimed,
             test_data.amount
         );
     }
@@ -1137,7 +1137,7 @@ mod tests {
                     recipient: account.account.clone(),
                     amount: account.amount,
                 })
-                    .unwrap(),
+                .unwrap(),
             }));
             assert_eq!(res.messages, vec![expected]);
 
@@ -1158,8 +1158,8 @@ mod tests {
             from_binary::<TotalClaimedResponse>(
                 &query(deps.as_ref(), env, QueryMsg::TotalClaimed { stage: 1 }).unwrap()
             )
-                .unwrap()
-                .total_claimed,
+            .unwrap()
+            .total_claimed,
             test_data.total_claimed_amount
         );
     }
@@ -1230,8 +1230,8 @@ mod tests {
             from_binary::<TotalClaimedResponse>(
                 &query(deps.as_ref(), env, QueryMsg::TotalClaimed { stage: 1 }).unwrap()
             )
-                .unwrap()
-                .total_claimed,
+            .unwrap()
+            .total_claimed,
             test_data.total_claimed_amount
         );
     }
@@ -1359,7 +1359,7 @@ mod tests {
                 recipient: test_data.account.clone(),
                 amount: test_data.amount,
             })
-                .unwrap(),
+            .unwrap(),
         }));
         assert_eq!(res.messages, vec![expected]);
 
@@ -1388,7 +1388,7 @@ mod tests {
             msg: to_binary(&Cw20ExecuteMsg::Burn {
                 amount: Uint128::new(9900),
             })
-                .unwrap(),
+            .unwrap(),
         }));
         assert_eq!(res.messages, vec![expected]);
 
@@ -1569,7 +1569,7 @@ mod tests {
                 recipient: test_data.account.clone(),
                 amount: test_data.amount,
             })
-                .unwrap(),
+            .unwrap(),
         }));
         assert_eq!(res.messages, vec![expected]);
 
@@ -1602,7 +1602,7 @@ mod tests {
                 amount: Uint128::new(9900),
                 recipient: "addr0005".to_string(),
             })
-                .unwrap(),
+            .unwrap(),
         }));
         assert_eq!(res.messages, vec![expected]);
 
