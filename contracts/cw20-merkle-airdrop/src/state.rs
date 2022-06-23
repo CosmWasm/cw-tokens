@@ -9,7 +9,8 @@ use cw_utils::{Expiration, Scheduled};
 pub struct Config {
     /// Owner If None set, contract is frozen.
     pub owner: Option<Addr>,
-    pub cw20_token_address: Addr,
+    pub cw20_token_address: Option<Addr>,
+    pub native_token: Option<String>,
 }
 
 pub const CONFIG_KEY: &str = "config";
