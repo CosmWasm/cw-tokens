@@ -1,7 +1,7 @@
 #[cfg(not(feature = "library"))]
 use cosmwasm_std::{
-    entry_point, from_binary, to_binary, Addr, Binary, Deps, DepsMut, Env, MessageInfo,
-    QueryRequest, Response, StdError, StdResult, SubMsg, Uint128, WasmQuery,
+    from_binary, to_binary, Addr, Binary, Deps, DepsMut, Env, MessageInfo, QueryRequest, Response,
+    StdError, StdResult, SubMsg, Uint128, WasmQuery,
 };
 use cw2::set_contract_version;
 use cw20::{
@@ -26,7 +26,6 @@ use cw20_base::state::{MinterData, TokenInfo, BALANCES, LOGO, MARKETING_INFO, TO
 const CONTRACT_NAME: &str = "crates.io:cw20-vault";
 const CONTRACT_VERSION: &str = env!("CARGO_PKG_VERSION");
 
-#[cfg_attr(not(feature = "library"), entry_point)]
 pub fn instantiate(
     deps: DepsMut,
     env: Env,
@@ -130,7 +129,6 @@ pub fn receive_cw20(
     }
 }
 
-#[cfg_attr(not(feature = "library"), entry_point)]
 pub fn execute(
     deps: DepsMut,
     env: Env,
@@ -593,7 +591,6 @@ pub fn execute_upload_logo(
     Ok(res)
 }
 
-#[cfg_attr(not(feature = "library"), entry_point)]
 pub fn query(deps: Deps, env: Env, msg: QueryMsg) -> StdResult<Binary> {
     match msg {
         QueryMsg::Balance { address } => to_binary(&query_balance(deps, address)?),
