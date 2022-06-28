@@ -11,7 +11,7 @@ pub struct BlockList {
 }
 impl BlockList {
     pub fn default() -> Self {
-        return BlockList { list: vec![] };
+        BlockList { list: vec![] }
     }
 
     /// returns true if the given address is on a blocklist
@@ -55,14 +55,14 @@ pub struct Config {
 
 impl Config {
     pub fn default(admin: Addr, asset: Addr) -> Self {
-        return Config {
+        Config {
             admin,
             asset,
             withdraw_allowed: true,
             withdraw_blocklist: BlockList::default(),
             deposit_allowed: true,
             deposit_blocklist: BlockList::default(),
-        };
+        }
     }
 }
 
