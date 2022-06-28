@@ -775,7 +775,7 @@ mod tests {
         mut deps: DepsMut,
         addr: &str,
         amount: Uint128,
-        mint: Option<MinterResponse>,
+        _mint: Option<MinterResponse>,
     ) -> TokenInfoResponse {
         let instantiate_msg = InstantiateMsg {
             name: "Auto Gen".to_string(),
@@ -845,8 +845,8 @@ mod tests {
         fn mintable() {
             let mut deps = mock_dependencies();
             let amount = Uint128::new(11223344);
-            let minter = String::from("asmodat");
-            let limit = Uint128::new(511223344);
+            let _minter = String::from("asmodat");
+            let _limit = Uint128::new(511223344);
             let instantiate_msg = InstantiateMsg {
                 name: "Cash Token".to_string(),
                 symbol: "CASH".to_string(),
