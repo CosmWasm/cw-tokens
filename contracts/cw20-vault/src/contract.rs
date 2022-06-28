@@ -480,7 +480,7 @@ fn convert_to_shares(deps: Deps, this_contract: &Addr, assets: Uint128) -> Uint1
     if total_assets.balance.is_zero() || total_supply.is_zero() {
         return Uint128::zero();
     }
-    return assets * total_supply / total_assets.balance;
+    assets * total_supply / total_assets.balance
 }
 
 fn convert_to_assets(deps: Deps, this_contract: &Addr, shares: Uint128) -> Uint128 {
@@ -502,7 +502,7 @@ fn convert_to_assets(deps: Deps, this_contract: &Addr, shares: Uint128) -> Uint1
     if total_assets.balance.is_zero() || total_supply.is_zero() {
         return Uint128::zero();
     }
-    return shares * total_assets.balance / total_supply;
+    shares * total_assets.balance / total_supply
 }
 
 pub fn execute_update_marketing(

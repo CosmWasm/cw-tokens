@@ -21,7 +21,7 @@ impl BlockList {
     }
 
     // update a blocklist addresses
-    pub fn update(&mut self, add: Vec<Addr>, remove: Vec<Addr>) -> () {
+    pub fn update(&mut self, add: Vec<Addr>, remove: Vec<Addr>) {
         // dedup add list passed in
         let mut add_set: Vec<Addr> = add.into_iter().collect();
         add_set.sort();
