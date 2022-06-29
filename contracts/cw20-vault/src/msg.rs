@@ -1,5 +1,5 @@
 use cosmwasm_std::{Addr, Binary, StdError, StdResult, Uint128};
-use cw20::Logo;
+use cw20::{Cw20ReceiveMsg, Logo};
 use cw_utils::Expiration;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -47,8 +47,11 @@ impl InstantiateMsg {
 #[derive(Serialize, Deserialize, Clone, PartialEq, JsonSchema, Debug)]
 #[serde(rename_all = "snake_case")]
 pub enum ExecuteMsg {
+    Receive(Cw20ReceiveMsg),
     /// Updates admin address
-    UpdateAdmin { new_admin: String },
+    UpdateAdmin {
+        new_admin: String,
+    },
     /// Updates config's global block states
     UpdateGlobalBlock {
         deposit_allowed: bool,
@@ -84,7 +87,10 @@ pub enum ExecuteMsg {
     },
 
     /// Implements CW20. Transfer is a base message to move tokens to another account without triggering actions
-    Transfer { recipient: String, amount: Uint128 },
+    Transfer {
+        recipient: String,
+        amount: Uint128,
+    },
     /// Implements CW20. Send is a base message to transfer tokens to a contract and trigger an action
     /// on the receiving contract.
     Send {

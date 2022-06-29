@@ -158,6 +158,7 @@ pub fn execute(
             recipient,
         } => execute_redeem(deps, env, info, shares, owner, recipient),
         // CW20 STANDARD MESSAGES
+        ExecuteMsg::Receive(msg) => receive_cw20(deps, env, info, msg),
         ExecuteMsg::Transfer { recipient, amount } => {
             Ok(execute_transfer(deps, env, info, recipient, amount)?)
         }
