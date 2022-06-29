@@ -230,7 +230,7 @@ pub fn execute_claim(
     }
 
     // verify signature
-    let airdrop_addr = if let Some(sig) = sig_info {
+    let proof_addr = if let Some(sig) = sig_info {
         // check if signature is correct
         verify_cosmos(deps.as_ref(), &sig.claim_msg, &sig.signature)?;
         // check claiming address is in signed msg
@@ -263,7 +263,7 @@ pub fn execute_claim(
     let config = CONFIG.load(deps.storage)?;
     let merkle_root = MERKLE_ROOT.load(deps.storage, stage)?;
 
-    let user_input = format!("{}{}", airdrop_addr, amount);
+    let user_input = format!("{}{}", proof_addr, amount);
     let hash = sha2::Sha256::digest(user_input.as_bytes())
         .as_slice()
         .try_into()
