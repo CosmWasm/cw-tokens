@@ -84,8 +84,8 @@ pub fn execute(
             stage,
             amount,
             proof,
-            signed_msg,
-        } => execute_claim(deps, env, info, stage, amount, proof, signed_msg),
+            sig_info,
+        } => execute_claim(deps, env, info, stage, amount, proof, sig_info),
         ExecuteMsg::Burn { stage } => execute_burn(deps, env, info, stage),
         ExecuteMsg::Withdraw { stage, address } => {
             execute_withdraw(deps, env, info, stage, address)
@@ -197,7 +197,7 @@ pub fn execute_claim(
     stage: u8,
     amount: Uint128,
     proof: Vec<String>,
-    signature_info: Option<SignatureInfo>,
+    sig_info: Option<SignatureInfo>,
 ) -> Result<Response, ContractError> {
     // airdrop begun
     let start = STAGE_START.may_load(deps.storage, stage)?;
@@ -219,7 +219,7 @@ pub fn execute_claim(
     }
 
     // verify signature
-    if let Some(sig) = signature_info {
+    if let Some(sig) = sig_info {
         verify_cosmos(deps.as_ref(), &sig.claim_msg, sig.signature)?;
         if sig.claim_msg.addr != info.sender {
             return Err(ContractError::VerificationFailed {});
@@ -776,7 +776,7 @@ mod tests {
             amount: test_data.amount,
             stage: 1u8,
             proof: test_data.proofs,
-            signed_msg: None,
+            sig_info: None,
         };
 
         let env = mock_env();
@@ -858,7 +858,7 @@ mod tests {
             amount: test_data.amount,
             stage: 2u8,
             proof: test_data.proofs,
-            signed_msg: None,
+            sig_info: None,
         };
 
         let env = mock_env();
@@ -929,7 +929,7 @@ mod tests {
             amount: test_data.amount,
             stage: 1u8,
             proof: test_data.proofs,
-            signed_msg: None,
+            sig_info: None,
         };
 
         let env = mock_env();
@@ -1009,7 +1009,7 @@ mod tests {
             amount: test_data.amount,
             stage: 2u8,
             proof: test_data.proofs,
-            signed_msg: None,
+            sig_info: None,
         };
 
         let env = mock_env();
@@ -1078,7 +1078,7 @@ mod tests {
             amount: test_data.amount,
             stage: 1u8,
             proof: test_data.proofs,
-            signed_msg: None,
+            sig_info: None,
         };
 
         let env = mock_env();
@@ -1142,7 +1142,7 @@ mod tests {
                 amount: account.amount,
                 stage: 1u8,
                 proof: account.proofs.clone(),
-                signed_msg: None,
+                sig_info: None,
             };
 
             let env = mock_env();
@@ -1217,7 +1217,7 @@ mod tests {
                 amount: account.amount,
                 stage: 1u8,
                 proof: account.proofs.clone(),
-                signed_msg: None,
+                sig_info: None,
             };
 
             let env = mock_env();
@@ -1287,7 +1287,7 @@ mod tests {
             amount: Uint128::new(5),
             stage: 1u8,
             proof: vec![],
-            signed_msg: None,
+            sig_info: None,
         };
 
         let res = execute(deps.as_mut(), env, info, msg).unwrap_err();
@@ -1368,7 +1368,7 @@ mod tests {
             amount: test_data.amount,
             stage: 1u8,
             proof: test_data.proofs,
-            signed_msg: None,
+            sig_info: None,
         };
 
         let info = mock_info(test_data.account.as_str(), &[]);
@@ -1457,7 +1457,7 @@ mod tests {
             amount: test_data.amount,
             stage: 1u8,
             proof: test_data.proofs,
-            signed_msg: None,
+            sig_info: None,
         };
 
         let info = mock_info(test_data.account.as_str(), &[]);
@@ -1580,7 +1580,7 @@ mod tests {
             amount: test_data.amount,
             stage: 1u8,
             proof: test_data.proofs,
-            signed_msg: None,
+            sig_info: None,
         };
 
         let info = mock_info(test_data.account.as_str(), &[]);
@@ -1673,7 +1673,7 @@ mod tests {
             amount: test_data.amount,
             stage: 1u8,
             proof: test_data.proofs,
-            signed_msg: None,
+            sig_info: None,
         };
 
         let info = mock_info(test_data.account.as_str(), &[]);
@@ -1761,7 +1761,7 @@ mod tests {
             amount: Uint128::new(5),
             stage: 1u8,
             proof: vec![],
-            signed_msg: None,
+            sig_info: None,
         };
 
         let res = execute(deps.as_mut(), env, info, msg).unwrap_err();
