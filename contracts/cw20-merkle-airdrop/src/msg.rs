@@ -1,7 +1,7 @@
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
-use cosmwasm_std::Uint128;
+use cosmwasm_std::{Binary, Uint128};
 use cw_utils::{Expiration, Scheduled};
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
@@ -35,6 +35,8 @@ pub enum ExecuteMsg {
         amount: Uint128,
         /// Proof is hex-encoded merkle proof.
         proof: Vec<String>,
+        /// Signed msg is set when claim verification will be done via signature
+        signed_msg: Option<SignatureInfo>,
     },
     /// Burn the remaining tokens after expire time (only owner)
     Burn { stage: u8 },
@@ -87,3 +89,16 @@ pub struct TotalClaimedResponse {
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 pub struct MigrateMsg {}
+
+// Signature check is done on claim if the value is present in the context
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+pub struct SignatureInfo {
+    /// Owner If None set, contract is frozen.
+    pub claim_msg: SignedClaimMsg,
+    pub signature: Binary,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+pub struct SignedClaimMsg {
+    pub addr: String,
+}
