@@ -1,3 +1,4 @@
+use bech32::ToBase32;
 #[cfg(not(feature = "library"))]
 use cosmwasm_std::entry_point;
 use cosmwasm_std::{
@@ -7,7 +8,8 @@ use cosmwasm_std::{
 use cw2::{get_contract_version, set_contract_version};
 use cw20::{Cw20Contract, Cw20ExecuteMsg};
 use cw_utils::{Expiration, Scheduled};
-use sha2::Digest;
+use ripemd::{Digest as RipDigest, Ripemd160};
+use sha2::{Digest as ShaDigest, Sha256};
 use std::convert::TryInto;
 
 use crate::error::ContractError;
@@ -17,7 +19,7 @@ use crate::msg::{
     MerkleRootResponse, MigrateMsg, QueryMsg, SignatureInfo, TotalClaimedResponse,
 };
 use crate::state::{
-    Config, CLAIM, CONFIG, LATEST_STAGE, MERKLE_ROOT, STAGE_AMOUNT, STAGE_AMOUNT_CLAIMED,
+    Config, CLAIM, CONFIG, HRP, LATEST_STAGE, MERKLE_ROOT, STAGE_AMOUNT, STAGE_AMOUNT_CLAIMED,
     STAGE_EXPIRATION, STAGE_START,
 };
 
@@ -71,6 +73,7 @@ pub fn execute(
             expiration,
             start,
             total_amount,
+            hrp,
         } => execute_register_merkle_root(
             deps,
             env,
@@ -79,6 +82,7 @@ pub fn execute(
             expiration,
             start,
             total_amount,
+            hrp,
         ),
         ExecuteMsg::Claim {
             stage,
@@ -142,6 +146,7 @@ pub fn execute_update_config(
     Ok(Response::new().add_attribute("action", "update_config"))
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn execute_register_merkle_root(
     deps: DepsMut,
     _env: Env,
@@ -150,6 +155,7 @@ pub fn execute_register_merkle_root(
     expiration: Option<Expiration>,
     start: Option<Scheduled>,
     total_amount: Option<Uint128>,
+    hrp: Option<String>,
 ) -> Result<Response, ContractError> {
     let cfg = CONFIG.load(deps.storage)?;
 
@@ -175,6 +181,11 @@ pub fn execute_register_merkle_root(
     // save start
     if let Some(start) = start {
         STAGE_START.save(deps.storage, stage, &start)?;
+    }
+
+    // save hrp
+    if let Some(hrp) = hrp {
+        HRP.save(deps.storage, stage, &hrp)?;
     }
 
     // save total airdropped amount
@@ -219,18 +230,40 @@ pub fn execute_claim(
     }
 
     // verify signature
-    if let Some(sig) = sig_info {
-        verify_cosmos(deps.as_ref(), &sig.claim_msg, sig.signature)?;
+    let airdrop_addr = if let Some(sig) = sig_info {
+        // check if signature is correct
+        verify_cosmos(deps.as_ref(), &sig.claim_msg, &sig.signature)?;
+        // check claiming address is in signed msg
         if sig.claim_msg.addr != info.sender {
             return Err(ContractError::VerificationFailed {});
         }
-    }
+
+        // get external address for merkle proof check
+        let sha_hash: [u8; 32] = Sha256::digest(sig.signature.as_slice())
+            .as_slice()
+            .try_into()
+            .map_err(|_| ContractError::WrongLength {})?;
+
+        let addr_hash: [u8; 32] = Ripemd160::digest(sha_hash)
+            .as_slice()
+            .try_into()
+            .map_err(|_| ContractError::WrongLength {})?;
+
+        let hrp = HRP.load(deps.storage, stage)?;
+        let addr: String =
+            bech32::encode(hrp.as_str(), addr_hash.to_base32(), bech32::Variant::Bech32)
+                .map_err(|_| ContractError::VerificationFailed {})?;
+
+        addr
+    } else {
+        info.sender.to_string()
+    };
 
     // verify merkle root
     let config = CONFIG.load(deps.storage)?;
     let merkle_root = MERKLE_ROOT.load(deps.storage, stage)?;
 
-    let user_input = format!("{}{}", info.sender, amount);
+    let user_input = format!("{}{}", airdrop_addr, amount);
     let hash = sha2::Sha256::digest(user_input.as_bytes())
         .as_slice()
         .try_into()
@@ -700,6 +733,7 @@ mod tests {
             expiration: None,
             start: None,
             total_amount: None,
+            hrp: None,
         };
 
         let res = execute(deps.as_mut(), env.clone(), info, msg).unwrap();
@@ -769,6 +803,7 @@ mod tests {
             expiration: None,
             start: None,
             total_amount: None,
+            hrp: None,
         };
         let _res = execute(deps.as_mut(), env, info, msg).unwrap();
 
@@ -850,6 +885,7 @@ mod tests {
             expiration: None,
             start: None,
             total_amount: None,
+            hrp: None,
         };
         let _res = execute(deps.as_mut(), env, info, msg).unwrap();
 
@@ -922,6 +958,7 @@ mod tests {
             expiration: None,
             start: None,
             total_amount: None,
+            hrp: None,
         };
         let _res = execute(deps.as_mut(), env, info, msg).unwrap();
 
@@ -1001,6 +1038,7 @@ mod tests {
             expiration: None,
             start: None,
             total_amount: None,
+            hrp: None,
         };
         let _res = execute(deps.as_mut(), env, info, msg).unwrap();
 
@@ -1071,6 +1109,7 @@ mod tests {
             expiration: None,
             start: None,
             total_amount: None,
+            hrp: None,
         };
         let _res = execute(deps.as_mut(), env, info, msg).unwrap();
 
@@ -1133,6 +1172,7 @@ mod tests {
             expiration: None,
             start: None,
             total_amount: None,
+            hrp: None,
         };
         let _res = execute(deps.as_mut(), env, info, msg).unwrap();
 
@@ -1208,6 +1248,7 @@ mod tests {
             expiration: None,
             start: None,
             total_amount: None,
+            hrp: None,
         };
         let _res = execute(deps.as_mut(), env, info, msg).unwrap();
 
@@ -1279,6 +1320,7 @@ mod tests {
             expiration: Some(Expiration::AtHeight(100)),
             start: None,
             total_amount: None,
+            hrp: None,
         };
         execute(deps.as_mut(), env.clone(), info.clone(), msg).unwrap();
 
@@ -1323,6 +1365,7 @@ mod tests {
             expiration: Some(Expiration::AtHeight(12346)),
             start: None,
             total_amount: Some(Uint128::new(100000)),
+            hrp: None,
         };
         execute(deps.as_mut(), env.clone(), info.clone(), msg).unwrap();
 
@@ -1360,6 +1403,7 @@ mod tests {
             expiration: Some(Expiration::AtHeight(12500)),
             start: None,
             total_amount: Some(Uint128::new(10000)),
+            hrp: None,
         };
         execute(deps.as_mut(), env.clone(), info, msg).unwrap();
 
@@ -1449,6 +1493,7 @@ mod tests {
             expiration: Some(Expiration::AtHeight(12500)),
             start: None,
             total_amount: Some(Uint128::new(10000)),
+            hrp: None,
         };
         execute(deps.as_mut(), env.clone(), info, msg).unwrap();
 
@@ -1532,6 +1577,7 @@ mod tests {
             expiration: Some(Expiration::AtHeight(12346)),
             start: None,
             total_amount: Some(Uint128::new(100000)),
+            hrp: None,
         };
         execute(deps.as_mut(), env.clone(), info.clone(), msg).unwrap();
 
@@ -1572,6 +1618,7 @@ mod tests {
             expiration: Some(Expiration::AtHeight(12500)),
             start: None,
             total_amount: Some(Uint128::new(10000)),
+            hrp: None,
         };
         execute(deps.as_mut(), env.clone(), info, msg).unwrap();
 
@@ -1665,6 +1712,7 @@ mod tests {
             expiration: Some(Expiration::AtHeight(12500)),
             start: None,
             total_amount: Some(Uint128::new(10000)),
+            hrp: None,
         };
         execute(deps.as_mut(), env.clone(), info, msg).unwrap();
 
@@ -1753,6 +1801,7 @@ mod tests {
             expiration: None,
             start: Some(Scheduled::AtHeight(200_000)),
             total_amount: None,
+            hrp: None,
         };
         execute(deps.as_mut(), env.clone(), info.clone(), msg).unwrap();
 
@@ -1797,6 +1846,7 @@ mod tests {
             expiration: None,
             start: None,
             total_amount: None,
+            hrp: None,
         };
         let _res = execute(deps.as_mut(), env, info, msg).unwrap();
 
@@ -1833,6 +1883,7 @@ mod tests {
             expiration: None,
             start: None,
             total_amount: None,
+            hrp: None,
         };
         let res = execute(deps.as_mut(), env, info, msg).unwrap_err();
         assert_eq!(res, ContractError::Unauthorized {});

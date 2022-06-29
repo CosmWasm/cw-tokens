@@ -28,6 +28,8 @@ pub enum ExecuteMsg {
         expiration: Option<Expiration>,
         start: Option<Scheduled>,
         total_amount: Option<Uint128>,
+        // hrp is bech32 prefix. Required for external network airdrop proof verification
+        hrp: Option<String>,
     },
     /// Claim does not check if contract has enough funds, owner must ensure it.
     Claim {
