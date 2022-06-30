@@ -1,4 +1,3 @@
-use bech32::ToBase32;
 #[cfg(not(feature = "library"))]
 use cosmwasm_std::entry_point;
 use cosmwasm_std::{
@@ -8,12 +7,11 @@ use cosmwasm_std::{
 use cw2::{get_contract_version, set_contract_version};
 use cw20::{Cw20Contract, Cw20ExecuteMsg};
 use cw_utils::{Expiration, Scheduled};
-use ripemd::{Digest as RipDigest, Ripemd160};
-use sha2::{Digest as ShaDigest, Sha256};
+use sha2::Digest;
 use std::convert::TryInto;
 
 use crate::error::ContractError;
-use crate::helpers::verify_cosmos;
+use crate::helpers;
 use crate::msg::{
     ConfigResponse, ExecuteMsg, InstantiateMsg, IsClaimedResponse, LatestStageResponse,
     MerkleRootResponse, MigrateMsg, QueryMsg, SignatureInfo, TotalClaimedResponse,
@@ -231,28 +229,8 @@ pub fn execute_claim(
 
     // verify signature
     let proof_addr = if let Some(sig) = sig_info {
-        // check if signature is correct
-        verify_cosmos(deps.as_ref(), &sig.claim_msg, &sig.signature)?;
-        // check claiming address is in signed msg
-        if sig.claim_msg.addr != info.sender {
-            return Err(ContractError::VerificationFailed {});
-        }
-
-        // get external address for merkle proof check
-        let sha_hash: [u8; 32] = Sha256::digest(sig.signature.as_slice())
-            .as_slice()
-            .try_into()
-            .map_err(|_| ContractError::WrongLength {})?;
-
-        let addr_hash: [u8; 32] = Ripemd160::digest(sha_hash)
-            .as_slice()
-            .try_into()
-            .map_err(|_| ContractError::WrongLength {})?;
-
         let hrp = HRP.load(deps.storage, stage)?;
-        let addr: String =
-            bech32::encode(hrp.as_str(), addr_hash.to_base32(), bech32::Variant::Bech32)
-                .map_err(|_| ContractError::VerificationFailed {})?;
+        let addr = helpers::verify_external_address(&deps, &info, hrp, &sig)?;
 
         addr
     } else {
@@ -528,7 +506,9 @@ pub fn query_latest_stage(deps: Deps) -> StdResult<LatestStageResponse> {
 }
 
 pub fn query_is_claimed(deps: Deps, stage: u8, address: String) -> StdResult<IsClaimedResponse> {
-    let is_claimed = CLAIM.may_load(deps.storage, (address,stage))?.unwrap_or(false);
+    let is_claimed = CLAIM
+        .may_load(deps.storage, (address, stage))?
+        .unwrap_or(false);
     let resp = IsClaimedResponse { is_claimed };
 
     Ok(resp)
@@ -555,6 +535,8 @@ pub fn migrate(deps: DepsMut, _env: Env, _msg: MigrateMsg) -> Result<Response, C
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::helpers::verify_external_address;
+    use crate::msg::SignedClaimMsg;
     use cosmwasm_std::testing::{
         mock_dependencies, mock_dependencies_with_balance, mock_env, mock_info,
     };
@@ -929,6 +911,8 @@ mod tests {
             .total_claimed,
             test_data.amount
         );
+
+        // Drop stage three with external sigs
     }
 
     #[test]
@@ -1897,5 +1881,23 @@ mod tests {
         };
         let res = execute(deps.as_mut(), env, info, msg).unwrap_err();
         assert_eq!(res, ContractError::Unauthorized {});
+    }
+
+    #[test]
+    fn test_external_sig_verification() {
+        let mut deps = mock_dependencies();
+        let info = mock_info("juno1purt0lem029gcsfzpdnxwmnmeuc7xwz8gnt99x", &[]);
+
+        let signature_raw = Binary::from_base64("eyJwdWJfa2V5IjoiQTNrUXU1cThkVm9JYUFXS0psdkFtKzdkbG1uRmFMQTl2Tm4wbmZuL25qUjUiLCJzaWduYXR1cmUiOiJEZWRqRTVpM3JpVmxLVi9mbU9PaGx5SDdRR2toUzZWcUV0d01maW9DZldWbGp0RmpXa2c2SmlOTUtwbmh5dUIzSFR3VTltU3paRXZ4VXhINHprcG5WZz09In0=");
+
+        let sig = SignatureInfo {
+            claim_msg: SignedClaimMsg {
+                addr: "juno1purt0lem029gcsfzpdnxwmnmeuc7xwz8gnt99x".to_string(),
+            },
+            signature: signature_raw.unwrap(),
+        };
+        let addr =
+            verify_external_address(&deps.as_mut(), &info, "terra".to_string(), &sig).unwrap();
+        assert_eq!(addr, "terra1ce2uyed946x9r9dejutepqg0myqaudwlz58uw9");
     }
 }
