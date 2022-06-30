@@ -37,8 +37,9 @@ pub enum ExecuteMsg {
         amount: Uint128,
         /// Proof is hex-encoded merkle proof.
         proof: Vec<String>,
-        /// Signature info is set when extra signature verification step is present
-        /// Useful for enabling claim for non standardized wallets like terra classic
+        /// Enables cross chain airdrops.
+        /// Target wallet proves identity by sending a signed [SignedClaimMsg](SignedClaimMsg)
+        /// containing the recipient address.
         sig_info: Option<SignatureInfo>,
     },
     /// Burn the remaining tokens after expire time (only owner)
