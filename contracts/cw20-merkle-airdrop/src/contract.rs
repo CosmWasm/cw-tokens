@@ -752,6 +752,8 @@ mod tests {
 
     const TEST_DATA_1: &[u8] = include_bytes!("../testdata/airdrop_stage_1_test_data.json");
     const TEST_DATA_2: &[u8] = include_bytes!("../testdata/airdrop_stage_2_test_data.json");
+    const TEST_DATA_EXTERNAL_SIG: &[u8] =
+        include_bytes!("../testdata/airdrop_external_sig_test_data.json");
 
     #[derive(Deserialize, Debug)]
     struct Encoded {
@@ -759,6 +761,7 @@ mod tests {
         amount: Uint128,
         root: String,
         proofs: Vec<String>,
+        sigs: Option<SignatureInfo>,
     }
 
     #[test]
@@ -1883,21 +1886,135 @@ mod tests {
         assert_eq!(res, ContractError::Unauthorized {});
     }
 
-    #[test]
-    fn test_external_sig_verification() {
-        let mut deps = mock_dependencies();
-        let info = mock_info("juno1purt0lem029gcsfzpdnxwmnmeuc7xwz8gnt99x", &[]);
+    mod external_sig {
+        use super::*;
 
-        let signature_raw = Binary::from_base64("eyJwdWJfa2V5IjoiQTNrUXU1cThkVm9JYUFXS0psdkFtKzdkbG1uRmFMQTl2Tm4wbmZuL25qUjUiLCJzaWduYXR1cmUiOiJEZWRqRTVpM3JpVmxLVi9mbU9PaGx5SDdRR2toUzZWcUV0d01maW9DZldWbGp0RmpXa2c2SmlOTUtwbmh5dUIzSFR3VTltU3paRXZ4VXhINHprcG5WZz09In0=");
+        #[test]
+        fn test_external_sig_verification() {
+            let mut deps = mock_dependencies();
+            let info = mock_info("juno1purt0lem029gcsfzpdnxwmnmeuc7xwz8gnt99x", &[]);
 
-        let sig = SignatureInfo {
-            claim_msg: SignedClaimMsg {
-                addr: "juno1purt0lem029gcsfzpdnxwmnmeuc7xwz8gnt99x".to_string(),
-            },
-            signature: signature_raw.unwrap(),
-        };
-        let addr =
-            verify_external_address(&deps.as_mut(), &info, "terra".to_string(), &sig).unwrap();
-        assert_eq!(addr, "terra1ce2uyed946x9r9dejutepqg0myqaudwlz58uw9");
+            let signature_raw = Binary::from_base64("eyJwdWJfa2V5IjoiQTNrUXU1cThkVm9JYUFXS0psdkFtKzdkbG1uRmFMQTl2Tm4wbmZuL25qUjUiLCJzaWduYXR1cmUiOiJEZWRqRTVpM3JpVmxLVi9mbU9PaGx5SDdRR2toUzZWcUV0d01maW9DZldWbGp0RmpXa2c2SmlOTUtwbmh5dUIzSFR3VTltU3paRXZ4VXhINHprcG5WZz09In0=");
+
+            let sig = SignatureInfo {
+                claim_msg: SignedClaimMsg {
+                    addr: "juno1purt0lem029gcsfzpdnxwmnmeuc7xwz8gnt99x".to_string(),
+                },
+                signature: signature_raw.unwrap(),
+            };
+            let addr =
+                verify_external_address(&deps.as_mut(), &info, "terra".to_string(), &sig).unwrap();
+            assert_eq!(addr, "terra1ce2uyed946x9r9dejutepqg0myqaudwlz58uw9");
+        }
+
+        #[test]
+        fn claim_with_external_sigs() {
+            // Run test 1
+            let mut deps = mock_dependencies_with_balance(&[Coin {
+                denom: "ujunox".to_string(),
+                amount: Uint128::new(1234567),
+            }]);
+            let test_data: Encoded = from_slice(TEST_DATA_EXTERNAL_SIG).unwrap();
+
+            let msg = InstantiateMsg {
+                owner: Some("owner0000".to_string()),
+                cw20_token_address: None,
+                native_token: Some("ujunox".to_string()),
+            };
+
+            let env = mock_env();
+            let info = mock_info("addr0000", &[]);
+            let _res = instantiate(deps.as_mut(), env, info, msg).unwrap();
+
+            let env = mock_env();
+            let info = mock_info("owner0000", &[]);
+            let msg = ExecuteMsg::RegisterMerkleRoot {
+                merkle_root: test_data.root,
+                expiration: None,
+                start: None,
+                total_amount: None,
+                hrp: Some("terra".to_string()),
+            };
+            let _res = execute(deps.as_mut(), env, info, msg).unwrap();
+
+            // cant claim without sig
+            let msg = ExecuteMsg::Claim {
+                amount: test_data.amount,
+                stage: 1u8,
+                proof: test_data.proofs.clone(),
+                sig_info: None,
+            };
+
+            let env = mock_env();
+            let info = mock_info(test_data.account.as_str(), &[]);
+            let res = execute(deps.as_mut(), env.clone(), info.clone(), msg.clone()).unwrap_err();
+            assert_eq!(res, ContractError::VerificationFailed {});
+
+            // can claim with sig
+            let msg = ExecuteMsg::Claim {
+                amount: test_data.amount,
+                stage: 1u8,
+                proof: test_data.proofs,
+                sig_info: test_data.sigs,
+            };
+
+            let env = mock_env();
+            let info = mock_info(test_data.account.as_str(), &[]);
+            let res = execute(deps.as_mut(), env.clone(), info.clone(), msg.clone()).unwrap();
+            let expected = SubMsg::new(CosmosMsg::Bank(BankMsg::Send {
+                to_address: test_data.account.clone(),
+                amount: vec![Coin {
+                    denom: "ujunox".to_string(),
+                    amount: test_data.amount,
+                }],
+            }));
+
+            assert_eq!(res.messages, vec![expected]);
+            assert_eq!(
+                res.attributes,
+                vec![
+                    attr("action", "claim"),
+                    attr("stage", "1"),
+                    attr("address", test_data.account.clone()),
+                    attr("amount", test_data.amount),
+                ]
+            );
+
+            // Check total claimed on stage 1
+            assert_eq!(
+                from_binary::<TotalClaimedResponse>(
+                    &query(
+                        deps.as_ref(),
+                        env.clone(),
+                        QueryMsg::TotalClaimed { stage: 1 },
+                    )
+                    .unwrap()
+                )
+                .unwrap()
+                .total_claimed,
+                test_data.amount
+            );
+
+            // Check address is claimed
+            assert!(
+                from_binary::<IsClaimedResponse>(
+                    &query(
+                        deps.as_ref(),
+                        env.clone(),
+                        QueryMsg::IsClaimed {
+                            stage: 1,
+                            address: test_data.account,
+                        },
+                    )
+                    .unwrap()
+                )
+                .unwrap()
+                .is_claimed
+            );
+
+            // check error on double claim
+            let res = execute(deps.as_mut(), env, info, msg).unwrap_err();
+            assert_eq!(res, ContractError::Claimed {});
+        }
     }
 }
