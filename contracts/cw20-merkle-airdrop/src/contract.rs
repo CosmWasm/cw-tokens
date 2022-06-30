@@ -224,7 +224,7 @@ pub fn execute_claim(
     }
 
     // verify not claimed
-    let claimed = CLAIM.may_load(deps.storage, (&info.sender, stage))?;
+    let claimed = CLAIM.may_load(deps.storage, (info.sender.to_string(), stage))?;
     if claimed.is_some() {
         return Err(ContractError::Claimed {});
     }
@@ -287,7 +287,7 @@ pub fn execute_claim(
     }
 
     // Update claim index to the current stage
-    CLAIM.save(deps.storage, (&info.sender, stage), &true)?;
+    CLAIM.save(deps.storage, (proof_addr, stage), &true)?;
 
     // Update total claimed to reflect
     let mut claimed_amount = STAGE_AMOUNT_CLAIMED.load(deps.storage, stage)?;
@@ -328,7 +328,7 @@ pub fn execute_claim(
     let res = Response::new().add_message(message).add_attributes(vec![
         attr("action", "claim"),
         attr("stage", stage.to_string()),
-        attr("address", info.sender),
+        attr("address", info.sender.to_string()),
         attr("amount", amount),
     ]);
     Ok(res)
@@ -528,8 +528,7 @@ pub fn query_latest_stage(deps: Deps) -> StdResult<LatestStageResponse> {
 }
 
 pub fn query_is_claimed(deps: Deps, stage: u8, address: String) -> StdResult<IsClaimedResponse> {
-    let key: (&Addr, u8) = (&deps.api.addr_validate(&address)?, stage);
-    let is_claimed = CLAIM.may_load(deps.storage, key)?.unwrap_or(false);
+    let is_claimed = CLAIM.may_load(deps.storage, (address,stage))?.unwrap_or(false);
     let resp = IsClaimedResponse { is_claimed };
 
     Ok(resp)
