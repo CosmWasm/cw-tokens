@@ -1,5 +1,6 @@
-use crate::error::ContractError;
 use cw20::{EmbeddedLogo, Logo};
+
+use crate::error::ContractError;
 
 const LOGO_SIZE_CAP: usize = 5 * 1024;
 

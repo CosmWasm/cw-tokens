@@ -1,8 +1,9 @@
+use schemars::JsonSchema;
+use serde::{Deserialize, Serialize};
+
 use cosmwasm_std::{Addr, Binary, StdError, StdResult, Uint128};
 use cw20::{Cw20ReceiveMsg, Logo};
 use cw_utils::Expiration;
-use schemars::JsonSchema;
-use serde::{Deserialize, Serialize};
 
 use crate::utils::{is_valid_name, is_valid_symbol};
 

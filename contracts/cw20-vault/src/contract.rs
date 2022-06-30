@@ -8,12 +8,6 @@ use cw20::{
     BalanceResponse, Cw20Coin, Cw20QueryMsg::Balance as Cw20BalanceQueryMsg, Cw20ReceiveMsg,
     DownloadLogoResponse, EmbeddedLogo, Logo, LogoInfo, MarketingInfoResponse, TokenInfoResponse,
 };
-
-use crate::amount::Amount;
-use crate::error::ContractError;
-use crate::msg::{ConfigResponse, Cw20HookMsg, ExecuteMsg, InstantiateMsg, QueryMsg};
-use crate::state::{Config, CONFIG};
-use crate::utils::verify_logo;
 use cw20_base::allowances::{
     deduct_allowance, execute_decrease_allowance, execute_increase_allowance, execute_send_from,
     execute_transfer_from, query_allowance,
@@ -21,6 +15,12 @@ use cw20_base::allowances::{
 use cw20_base::contract::{execute_send, execute_transfer};
 use cw20_base::enumerable::{query_all_accounts, query_all_allowances};
 use cw20_base::state::{MinterData, TokenInfo, BALANCES, LOGO, MARKETING_INFO, TOKEN_INFO};
+
+use crate::amount::Amount;
+use crate::error::ContractError;
+use crate::msg::{ConfigResponse, Cw20HookMsg, ExecuteMsg, InstantiateMsg, QueryMsg};
+use crate::state::{Config, CONFIG};
+use crate::utils::verify_logo;
 
 // version info for migration info
 const CONTRACT_NAME: &str = "crates.io:cw20-vault";
