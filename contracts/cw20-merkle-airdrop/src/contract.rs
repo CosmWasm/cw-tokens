@@ -221,21 +221,22 @@ pub fn execute_claim(
         return Err(ContractError::StageExpired { stage, expiration });
     }
 
+    // if present verify signature and extract external address or use info.sender as proof
+    let proof_addr = match sig_info {
+        None => info.sender.to_string(),
+        Some(sig) => {
+            let hrp = HRP.load(deps.storage, stage)?;
+            let addr = helpers::verify_external_address(&deps, &info, hrp, &sig)?;
+
+            addr
+        }
+    };
+
     // verify not claimed
-    let claimed = CLAIM.may_load(deps.storage, (info.sender.to_string(), stage))?;
+    let claimed = CLAIM.may_load(deps.storage, (proof_addr.clone(), stage))?;
     if claimed.is_some() {
         return Err(ContractError::Claimed {});
     }
-
-    // verify signature
-    let proof_addr = if let Some(sig) = sig_info {
-        let hrp = HRP.load(deps.storage, stage)?;
-        let addr = helpers::verify_external_address(&deps, &info, hrp, &sig)?;
-
-        addr
-    } else {
-        info.sender.to_string()
-    };
 
     // verify merkle root
     let config = CONFIG.load(deps.storage)?;
@@ -752,8 +753,6 @@ mod tests {
 
     const TEST_DATA_1: &[u8] = include_bytes!("../testdata/airdrop_stage_1_test_data.json");
     const TEST_DATA_2: &[u8] = include_bytes!("../testdata/airdrop_stage_2_test_data.json");
-    const TEST_DATA_EXTERNAL_SIG: &[u8] =
-        include_bytes!("../testdata/airdrop_external_sig_test_data.json");
 
     #[derive(Deserialize, Debug)]
     struct Encoded {
@@ -761,7 +760,8 @@ mod tests {
         amount: Uint128,
         root: String,
         proofs: Vec<String>,
-        sigs: Option<SignatureInfo>,
+        signed_msg: Option<SignatureInfo>,
+        hrp: Option<String>
     }
 
     #[test]
@@ -1889,6 +1889,9 @@ mod tests {
     mod external_sig {
         use super::*;
 
+        const TEST_DATA_EXTERNAL_SIG: &[u8] =
+            include_bytes!("../testdata/airdrop_external_sig_test_data.json");
+
         #[test]
         fn test_external_sig_verification() {
             let mut deps = mock_dependencies();
@@ -1915,6 +1918,7 @@ mod tests {
                 amount: Uint128::new(1234567),
             }]);
             let test_data: Encoded = from_slice(TEST_DATA_EXTERNAL_SIG).unwrap();
+            let claim_addr = test_data.signed_msg.clone().unwrap().claim_msg.addr;
 
             let msg = InstantiateMsg {
                 owner: Some("owner0000".to_string()),
@@ -1933,7 +1937,7 @@ mod tests {
                 expiration: None,
                 start: None,
                 total_amount: None,
-                hrp: Some("terra".to_string()),
+                hrp: Some(test_data.hrp.unwrap()),
             };
             let _res = execute(deps.as_mut(), env, info, msg).unwrap();
 
@@ -1946,7 +1950,7 @@ mod tests {
             };
 
             let env = mock_env();
-            let info = mock_info(test_data.account.as_str(), &[]);
+            let info = mock_info(claim_addr.as_str(), &[]);
             let res = execute(deps.as_mut(), env.clone(), info.clone(), msg.clone()).unwrap_err();
             assert_eq!(res, ContractError::VerificationFailed {});
 
@@ -1955,14 +1959,14 @@ mod tests {
                 amount: test_data.amount,
                 stage: 1u8,
                 proof: test_data.proofs,
-                sig_info: test_data.sigs,
+                sig_info: test_data.signed_msg,
             };
 
             let env = mock_env();
-            let info = mock_info(test_data.account.as_str(), &[]);
+            let info = mock_info(claim_addr.as_str(), &[]);
             let res = execute(deps.as_mut(), env.clone(), info.clone(), msg.clone()).unwrap();
             let expected = SubMsg::new(CosmosMsg::Bank(BankMsg::Send {
-                to_address: test_data.account.clone(),
+                to_address: claim_addr.clone(),
                 amount: vec![Coin {
                     denom: "ujunox".to_string(),
                     amount: test_data.amount,
@@ -1975,7 +1979,7 @@ mod tests {
                 vec![
                     attr("action", "claim"),
                     attr("stage", "1"),
-                    attr("address", test_data.account.clone()),
+                    attr("address", claim_addr),
                     attr("amount", test_data.amount),
                 ]
             );
