@@ -222,6 +222,7 @@ pub fn execute_claim(
     }
 
     // if present verify signature and extract external address or use info.sender as proof
+    // If not info.sender is not present in the root, verification will fail
     let proof_addr = match sig_info {
         None => info.sender.to_string(),
         Some(sig) => {
@@ -1912,7 +1913,6 @@ mod tests {
 
         #[test]
         fn claim_with_external_sigs() {
-            // Run test 1
             let mut deps = mock_dependencies_with_balance(&[Coin {
                 denom: "ujunox".to_string(),
                 amount: Uint128::new(1234567),
@@ -1941,7 +1941,7 @@ mod tests {
             };
             let _res = execute(deps.as_mut(), env, info, msg).unwrap();
 
-            // cant claim without sig
+            // cant claim without sig, info.sender is not present in the root
             let msg = ExecuteMsg::Claim {
                 amount: test_data.amount,
                 stage: 1u8,
