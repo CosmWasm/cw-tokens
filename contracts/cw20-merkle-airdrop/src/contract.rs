@@ -227,9 +227,7 @@ pub fn execute_claim(
         None => info.sender.to_string(),
         Some(sig) => {
             let hrp = HRP.load(deps.storage, stage)?;
-            let addr = helpers::verify_external_address(&deps, &info, hrp, &sig)?;
-
-            addr
+            helpers::verify_external_address(&deps, &info, hrp, &sig)?
         }
     };
 
@@ -762,7 +760,7 @@ mod tests {
         root: String,
         proofs: Vec<String>,
         signed_msg: Option<SignatureInfo>,
-        hrp: Option<String>
+        hrp: Option<String>,
     }
 
     #[test]
@@ -1951,7 +1949,7 @@ mod tests {
 
             let env = mock_env();
             let info = mock_info(claim_addr.as_str(), &[]);
-            let res = execute(deps.as_mut(), env.clone(), info.clone(), msg.clone()).unwrap_err();
+            let res = execute(deps.as_mut(), env, info, msg).unwrap_err();
             assert_eq!(res, ContractError::VerificationFailed {});
 
             // can claim with sig
