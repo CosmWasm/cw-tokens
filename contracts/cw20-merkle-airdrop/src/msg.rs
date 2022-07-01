@@ -100,6 +100,11 @@ pub struct AccountMapResponse {
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+pub struct ListAccountMapResponse {
+    pub address_maps: Vec<AccountMapResponse>,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 pub struct MigrateMsg {}
 
 // Signature check is done on claim if the value is present in the context

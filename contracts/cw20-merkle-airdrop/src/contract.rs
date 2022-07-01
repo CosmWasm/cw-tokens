@@ -2,10 +2,11 @@
 use cosmwasm_std::entry_point;
 use cosmwasm_std::{
     attr, to_binary, Addr, BankMsg, Binary, Coin, CosmosMsg, Deps, DepsMut, Env, MessageInfo,
-    Response, StdResult, Uint128,
+    Order, Response, StdResult, Uint128,
 };
 use cw2::{get_contract_version, set_contract_version};
 use cw20::{Cw20Contract, Cw20ExecuteMsg};
+use cw_storage_plus::Bound;
 use cw_utils::{Expiration, Scheduled};
 use sha2::Digest;
 use std::convert::TryInto;
@@ -14,8 +15,8 @@ use crate::error::ContractError;
 use crate::helpers;
 use crate::msg::{
     AccountMapResponse, ConfigResponse, ExecuteMsg, InstantiateMsg, IsClaimedResponse,
-    LatestStageResponse, MerkleRootResponse, MigrateMsg, QueryMsg, SignatureInfo,
-    TotalClaimedResponse,
+    LatestStageResponse, ListAccountMapResponse, MerkleRootResponse, MigrateMsg, QueryMsg,
+    SignatureInfo, TotalClaimedResponse,
 };
 use crate::state::{
     Config, CLAIM, CONFIG, HRP, LATEST_STAGE, MERKLE_ROOT, STAGE_ACCOUNT_MAP, STAGE_AMOUNT,
@@ -546,6 +547,35 @@ pub fn query_address_map(
         external_address,
     };
 
+    Ok(resp)
+}
+
+// settings for pagination
+const MAX_LIMIT: u32 = 1000;
+const DEFAULT_LIMIT: u32 = 10;
+
+pub fn list_address_map(
+    deps: Deps,
+    stage: u8,
+    start_after: Option<String>,
+    limit: Option<u32>,
+) -> StdResult<ListAccountMapResponse> {
+    let limit = limit.unwrap_or(DEFAULT_LIMIT).min(MAX_LIMIT) as usize;
+    let start = start_after.map(Bound::exclusive);
+
+    let address_maps = STAGE_ACCOUNT_MAP
+        .prefix(stage)
+        .range(deps.storage, start, None, Order::Ascending)
+        .take(limit)
+        .map(|p| {
+            p.map(|(external_address, host_address)| AccountMapResponse {
+                host_address,
+                external_address,
+            })
+        })
+        .collect::<StdResult<_>>()?;
+
+    let resp = ListAccountMapResponse { address_maps };
     Ok(resp)
 }
 
@@ -2007,7 +2037,7 @@ mod tests {
                 vec![
                     attr("action", "claim"),
                     attr("stage", "1"),
-                    attr("address", claim_addr),
+                    attr("address", claim_addr.clone()),
                     attr("amount", test_data.amount),
                 ]
             );
@@ -2035,7 +2065,7 @@ mod tests {
                         env.clone(),
                         QueryMsg::IsClaimed {
                             stage: 1,
-                            address: test_data.account,
+                            address: test_data.account.clone(),
                         },
                     )
                     .unwrap()
@@ -2045,8 +2075,25 @@ mod tests {
             );
 
             // check error on double claim
-            let res = execute(deps.as_mut(), env, info, msg).unwrap_err();
+            let res = execute(deps.as_mut(), env.clone(), info, msg).unwrap_err();
             assert_eq!(res, ContractError::Claimed {});
+
+            // query map
+
+            let map = from_binary::<AccountMapResponse>(
+                &query(
+                    deps.as_ref(),
+                    env,
+                    QueryMsg::AccountMap {
+                        stage: 1,
+                        external_address: test_data.account.clone(),
+                    },
+                )
+                .unwrap(),
+            )
+            .unwrap();
+            assert_eq!(map.external_address, test_data.account);
+            assert_eq!(map.host_address, claim_addr);
         }
     }
 }
