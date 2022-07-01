@@ -21,6 +21,7 @@ contract you have written that you would like to share with the community.
 | cw20-escrow             | [Release v0.11.2](https://github.com/CosmWasm/cw-tokens/releases/download/v0.11.2/cw20_escrow.wasm)          | [![Docs](https://docs.rs/cw20-escrow/badge.svg)](https://docs.rs/cw20-escrow)    |
 | cw20-staking            | [Release v0.11.2](https://github.com/CosmWasm/cw-tokens/releases/download/v0.11.2/cw20_staking.wasm)          | [![Docs](https://docs.rs/cw20-staking/badge.svg)](https://docs.rs/cw20-staking)    |
 | cw20-merkle-airdrop     | [Release v0.11.2](https://github.com/CosmWasm/cw-tokens/releases/download/v0.11.2/cw20_merkle_airdrop.wasm)          | [![Docs](https://docs.rs/cw20-merkle-airdrop/badge.svg)](https://docs.rs/cw20-merkle-airdrop)    |
+| cw20-vault     |          | [![Docs](https://docs.rs/cw20-vault/badge.svg)](https://docs.rs/cw20-vault)    |
 
 **Warning** None of these contracts have been audited and no liability is
 assumed for the use of this code. They are provided to turbo-start
@@ -46,6 +47,8 @@ and cw20 tokens. This is a good example to show how to interact with
 cw20 tokens.
 * [`cw20-merkle-airdrop`](./contracts/cw20-merkle-airdrop) is a contract
   for efficient cw20 token airdrop distribution.
+* [`cw20-vault`](./contracts/cw20-vault) is a contract
+  for a vault that mints/burns a fungible, yield bearing cw20 token. Follows EIP-4626 standard.
 
 ## Compiling
 
