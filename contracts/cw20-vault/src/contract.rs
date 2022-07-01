@@ -603,19 +603,21 @@ pub fn query(deps: Deps, env: Env, msg: QueryMsg) -> StdResult<Binary> {
         QueryMsg::TotalAssets {} => to_binary(&query_total_assets(deps, env)?),
         QueryMsg::Asset {} => to_binary(&query_asset(deps)?),
         QueryMsg::ConvertToAssets { shares } => {
-            to_binary(&query_convert_to_assets(deps, env, shares)?)
+            to_binary(&convert_to_assets(deps, &env.contract.address, shares))
         }
         QueryMsg::ConvertToShares { assets } => {
-            to_binary(&query_convert_to_shares(deps, env, assets)?)
+            to_binary(&convert_to_shares(deps, &env.contract.address, assets))
         }
         QueryMsg::PreviewWithdraw { assets } => {
             to_binary(&query_preview_withdraw(deps, env, assets)?)
         }
         QueryMsg::MaxWithdraw { owner } => to_binary(&query_max_withdraw(deps, env, owner)?),
-        QueryMsg::PreviewRedeem { shares } => to_binary(&query_preview_redeem(deps, env, shares)?),
+        QueryMsg::PreviewRedeem { shares } => {
+            to_binary(&convert_to_assets(deps, &env.contract.address, shares))
+        }
         QueryMsg::MaxRedeem { owner } => to_binary(&query_max_redeem(deps, owner)?),
         QueryMsg::PreviewDeposit { assets } => {
-            to_binary(&query_preview_deposit(deps, env, assets)?)
+            to_binary(&convert_to_shares(deps, &env.contract.address, assets))
         }
         QueryMsg::MaxDeposit { recipient } => to_binary(&query_max_deposit(deps, recipient)?),
         QueryMsg::Allowance { owner, spender } => {
@@ -641,7 +643,7 @@ pub fn query_balance(deps: Deps, address: String) -> StdResult<Uint128> {
     let address = deps.api.addr_validate(&address)?;
     let balance = BALANCES
         .may_load(deps.storage, &address)?
-        .unwrap_or_default();
+        .unwrap_or(Uint128::zero());
     Ok(balance)
 }
 
@@ -660,13 +662,6 @@ pub fn query_total_assets(deps: Deps, env: Env) -> StdResult<Uint128> {
     Ok(total_assets.balance)
 }
 
-pub fn query_convert_to_assets(deps: Deps, env: Env, shares: Uint128) -> StdResult<Uint128> {
-    Ok(convert_to_assets(deps, &env.contract.address, shares))
-}
-
-pub fn query_convert_to_shares(deps: Deps, env: Env, assets: Uint128) -> StdResult<Uint128> {
-    Ok(convert_to_shares(deps, &env.contract.address, assets))
-}
 pub fn query_preview_withdraw(deps: Deps, env: Env, assets: Uint128) -> StdResult<Uint128> {
     let token_info = TOKEN_INFO.load(deps.storage)?;
     let shares = convert_to_shares(deps, &env.contract.address, assets);
@@ -674,14 +669,6 @@ pub fn query_preview_withdraw(deps: Deps, env: Env, assets: Uint128) -> StdResul
         return Ok(Uint128::zero());
     }
     Ok(shares)
-}
-
-pub fn query_preview_deposit(deps: Deps, env: Env, assets: Uint128) -> StdResult<Uint128> {
-    Ok(convert_to_shares(deps, &env.contract.address, assets))
-}
-
-pub fn query_preview_redeem(deps: Deps, env: Env, shares: Uint128) -> StdResult<Uint128> {
-    Ok(convert_to_assets(deps, &env.contract.address, shares))
 }
 
 /// --------------------------------------------
@@ -928,6 +915,7 @@ mod tests {
 
         let _info = mock_info("test", &[]);
         let env = mock_env();
+
         // check balance query (full)
         let data = query(
             deps.as_ref(),
@@ -935,25 +923,55 @@ mod tests {
             QueryMsg::Balance { address: addr1 },
         )
         .unwrap();
-        let loaded: BalanceResponse = from_binary(&data).unwrap();
-        assert_eq!(loaded.balance, amount1);
+        let bal: Uint128 = from_binary(&data).unwrap();
+        assert_eq!(bal, amount1);
 
         // check balance query (empty)
         let data = query(
             deps.as_ref(),
-            env,
+            env.clone(),
             QueryMsg::Balance {
                 address: String::from("addr0002"),
             },
         )
         .unwrap();
-        let loaded: BalanceResponse = from_binary(&data).unwrap();
-        assert_eq!(loaded.balance, Uint128::zero());
+        let bal: Uint128 = from_binary(&data).unwrap();
+        assert_eq!(bal, Uint128::zero());
 
         // query_asset
+        let data = query(deps.as_ref(), env.clone(), QueryMsg::Asset {}).unwrap();
+        let asset: String = from_binary(&data).unwrap();
+        assert_eq!(asset, "cw20-test".to_string());
+
         // query_total_assets
+        let data = query(deps.as_ref(), env.clone(), QueryMsg::TotalAssets {}).unwrap();
+        let total: Uint128 = from_binary(&data).unwrap();
+        assert_eq!(total, amount1);
+
         // query_convert_to_assets
+        let data = query(
+            deps.as_ref(),
+            env.clone(),
+            QueryMsg::ConvertToAssets {
+                shares: Uint128::from(1000000u128),
+            },
+        )
+        .unwrap();
+        let assets: Uint128 = from_binary(&data).unwrap();
+        assert_eq!(assets, Uint128::zero());
+
         // query_convert_to_shares
+        let data = query(
+            deps.as_ref(),
+            env.clone(),
+            QueryMsg::ConvertToShares {
+                assets: Uint128::from(12340000u128),
+            },
+        )
+        .unwrap();
+        let shares: Uint128 = from_binary(&data).unwrap();
+        assert_eq!(shares, Uint128::zero());
+
         // query_preview_withdraw
         // query_preview_deposit
         // query_preview_redeem
