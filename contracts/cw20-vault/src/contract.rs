@@ -1,7 +1,7 @@
 #[cfg(not(feature = "library"))]
 use cosmwasm_std::{
-    from_binary, to_binary, Addr, Binary, Deps, DepsMut, Env, MessageInfo, QueryRequest, Response,
-    StdError, StdResult, SubMsg, Uint128, WasmQuery,
+    entry_point, from_binary, to_binary, Addr, Binary, Deps, DepsMut, Env, MessageInfo,
+    QueryRequest, Response, StdError, StdResult, SubMsg, Uint128, WasmQuery,
 };
 use cw2::set_contract_version;
 use cw20::{
@@ -26,6 +26,7 @@ use crate::utils::verify_logo;
 const CONTRACT_NAME: &str = "crates.io:cw20-vault";
 const CONTRACT_VERSION: &str = env!("CARGO_PKG_VERSION");
 
+#[entry_point]
 pub fn instantiate(
     deps: DepsMut,
     env: Env,
@@ -129,6 +130,7 @@ pub fn receive_cw20(
     }
 }
 
+#[entry_point]
 pub fn execute(
     deps: DepsMut,
     env: Env,
@@ -592,12 +594,13 @@ pub fn execute_upload_logo(
     Ok(res)
 }
 
+#[entry_point]
 pub fn query(deps: Deps, env: Env, msg: QueryMsg) -> StdResult<Binary> {
     match msg {
         QueryMsg::Balance { address } => to_binary(&query_balance(deps, address)?),
         QueryMsg::ConfigInfo {} => to_binary(&query_config(deps)?),
         QueryMsg::TokenInfo {} => to_binary(&query_token_info(deps)?),
-        QueryMsg::TotalAssets {} => to_binary(&query_total_assets(deps)?),
+        QueryMsg::TotalAssets {} => to_binary(&query_total_assets(deps, env)?),
         QueryMsg::Asset {} => to_binary(&query_asset(deps)?),
         QueryMsg::ConvertToAssets { shares } => {
             to_binary(&query_convert_to_assets(deps, env, shares)?)
@@ -642,14 +645,19 @@ pub fn query_balance(deps: Deps, address: String) -> StdResult<Uint128> {
     Ok(balance)
 }
 
-pub fn query_balance_info(deps: Deps) -> StdResult<String> {
-    let config = CONFIG.load(deps.storage).unwrap();
-    Ok(config.asset.to_string())
-}
-
-pub fn query_total_assets(deps: Deps) -> StdResult<Uint128> {
-    let token_info = TOKEN_INFO.load(deps.storage)?;
-    Ok(token_info.total_supply)
+pub fn query_total_assets(deps: Deps, env: Env) -> StdResult<Uint128> {
+    let config = CONFIG.load(deps.storage)?;
+    let total_assets: BalanceResponse = deps
+        .querier
+        .query(&QueryRequest::Wasm(WasmQuery::Smart {
+            contract_addr: config.asset.to_string(),
+            msg: to_binary(&Cw20BalanceQueryMsg {
+                address: env.contract.address.to_string(),
+            })
+            .unwrap(),
+        }))
+        .unwrap();
+    Ok(total_assets.balance)
 }
 
 pub fn query_convert_to_assets(deps: Deps, env: Env, shares: Uint128) -> StdResult<Uint128> {
@@ -764,21 +772,16 @@ mod tests {
     }
 
     // this will set up the instantiation for other tests
-    fn do_instantiate(deps: DepsMut, addr: &str, amount: Uint128) -> TokenInfoResponse {
-        _do_instantiate(deps, addr, amount, None)
+    fn do_instantiate(deps: DepsMut) -> TokenInfoResponse {
+        _do_instantiate(deps, None)
     }
 
     // this will set up the instantiation for other tests
-    fn _do_instantiate(
-        mut deps: DepsMut,
-        addr: &str,
-        amount: Uint128,
-        _mint: Option<MinterResponse>,
-    ) -> TokenInfoResponse {
+    fn _do_instantiate(mut deps: DepsMut, _mint: Option<MinterResponse>) -> TokenInfoResponse {
         let instantiate_msg = InstantiateMsg {
-            name: "Auto Gen".to_string(),
-            symbol: "AUTO".to_string(),
-            decimals: 3,
+            name: "Vault Token".to_string(),
+            symbol: "VTKN".to_string(),
+            decimals: 6,
             marketing: None,
             asset: "cw20-test".to_string(),
             cap: None,
@@ -792,13 +795,12 @@ mod tests {
         assert_eq!(
             meta,
             TokenInfoResponse {
-                name: "Auto Gen".to_string(),
-                symbol: "AUTO".to_string(),
-                decimals: 3,
-                total_supply: amount,
+                name: "Vault Token".to_string(),
+                symbol: "VTKN".to_string(),
+                decimals: 6,
+                total_supply: Uint128::zero(),
             }
         );
-        assert_eq!(get_balance(deps.as_ref(), addr), amount);
         meta
     }
 
@@ -810,90 +812,32 @@ mod tests {
         #[test]
         fn basic() {
             let mut deps = mock_dependencies();
-            let amount = Uint128::from(11223344u128);
-            let instantiate_msg = InstantiateMsg {
-                name: "Cash Token".to_string(),
-                symbol: "CASH".to_string(),
-                decimals: 9,
-                marketing: None,
-                asset: "cw20-test".to_string(),
-                cap: None,
-            };
-            let info = mock_info("creator", &[]);
-            let env = mock_env();
-            let res = instantiate(deps.as_mut(), env, info, instantiate_msg).unwrap();
-            assert_eq!(0, res.messages.len());
+            let addr1 = String::from("addr0001");
+
+            let expected = do_instantiate(deps.as_mut());
 
             assert_eq!(
-                query_token_info(deps.as_ref()).unwrap(),
+                expected,
                 TokenInfoResponse {
-                    name: "Cash Token".to_string(),
-                    symbol: "CASH".to_string(),
-                    decimals: 9,
-                    total_supply: amount,
+                    name: "Vault Token".to_string(),
+                    symbol: "VTKN".to_string(),
+                    decimals: 6,
+                    total_supply: Uint128::zero(),
                 }
             );
-            assert_eq!(
-                get_balance(deps.as_ref(), "addr0000"),
-                Uint128::new(11223344)
-            );
-        }
-
-        #[test]
-        fn mintable() {
-            let mut deps = mock_dependencies();
-            let amount = Uint128::new(11223344);
-            let _minter = String::from("asmodat");
-            let _limit = Uint128::new(511223344);
-            let instantiate_msg = InstantiateMsg {
-                name: "Cash Token".to_string(),
-                symbol: "CASH".to_string(),
-                decimals: 9,
-                marketing: None,
-                asset: "cw20-test".to_string(),
-                cap: None,
-            };
-            let info = mock_info("creator", &[]);
-            let env = mock_env();
-            let res = instantiate(deps.as_mut(), env, info, instantiate_msg).unwrap();
-            assert_eq!(0, res.messages.len());
 
             assert_eq!(
-                query_token_info(deps.as_ref()).unwrap(),
-                TokenInfoResponse {
-                    name: "Cash Token".to_string(),
-                    symbol: "CASH".to_string(),
-                    decimals: 9,
-                    total_supply: amount,
+                query_config(deps.as_ref()).unwrap(),
+                ConfigResponse {
+                    asset: "cw20-test".to_string(),
+                    withdraw_allowed: true,
+                    withdraw_blocklist: vec![],
+                    deposit_allowed: true,
+                    deposit_blocklist: vec![],
                 }
             );
-            assert_eq!(
-                get_balance(deps.as_ref(), "addr0000"),
-                Uint128::new(11223344)
-            );
-        }
 
-        #[test]
-        fn mintable_over_cap() {
-            let mut deps = mock_dependencies();
-            let _amount = Uint128::new(11223344);
-            let _minter = String::from("asmodat");
-            let _limit = Uint128::new(11223300);
-            let instantiate_msg = InstantiateMsg {
-                name: "Cash Token".to_string(),
-                symbol: "CASH".to_string(),
-                decimals: 9,
-                marketing: None,
-                asset: "cw20-test".to_string(),
-                cap: None,
-            };
-            let info = mock_info("creator", &[]);
-            let env = mock_env();
-            let err = instantiate(deps.as_mut(), env, info, instantiate_msg).unwrap_err();
-            assert_eq!(
-                err,
-                StdError::generic_err("Initial supply greater than cap").into()
-            );
+            assert_eq!(get_balance(deps.as_ref(), addr1), Uint128::zero());
         }
 
         mod marketing {
@@ -903,9 +847,9 @@ mod tests {
             fn basic() {
                 let mut deps = mock_dependencies();
                 let instantiate_msg = InstantiateMsg {
-                    name: "Cash Token".to_string(),
-                    symbol: "CASH".to_string(),
-                    decimals: 9,
+                    name: "Vault Token".to_string(),
+                    symbol: "VTKN".to_string(),
+                    decimals: 6,
                     marketing: Some(InstantiateMarketingInfo {
                         project: Some("Project".to_owned()),
                         description: Some("Description".to_owned()),
@@ -943,9 +887,9 @@ mod tests {
             fn invalid_marketing() {
                 let mut deps = mock_dependencies();
                 let instantiate_msg = InstantiateMsg {
-                    name: "Cash Token".to_string(),
-                    symbol: "CASH".to_string(),
-                    decimals: 9,
+                    name: "Vault Token".to_string(),
+                    symbol: "VTKN".to_string(),
+                    decimals: 6,
                     marketing: Some(InstantiateMarketingInfo {
                         project: Some("Project".to_owned()),
                         description: Some("Description".to_owned()),
@@ -971,59 +915,12 @@ mod tests {
     }
 
     #[test]
-    fn instantiate_multiple_accounts() {
-        let mut deps = mock_dependencies();
-        let amount1 = Uint128::from(11223344u128);
-        let addr1 = String::from("addr0001");
-        let amount2 = Uint128::from(7890987u128);
-        let addr2 = String::from("addr0002");
-        let info = mock_info("creator", &[]);
-        let env = mock_env();
-
-        // Fails with duplicate addresses
-        let instantiate_msg = InstantiateMsg {
-            name: "Bash Shell".to_string(),
-            symbol: "BASH".to_string(),
-            decimals: 6,
-            marketing: None,
-            asset: "cw20-test".to_string(),
-            cap: None,
-        };
-        let err =
-            instantiate(deps.as_mut(), env.clone(), info.clone(), instantiate_msg).unwrap_err();
-        assert_eq!(err, ContractError::DuplicateInitialBalanceAddresses {});
-
-        // Works with unique addresses
-        let instantiate_msg = InstantiateMsg {
-            name: "Bash Shell".to_string(),
-            symbol: "BASH".to_string(),
-            decimals: 6,
-            marketing: None,
-            asset: "cw20-test".to_string(),
-            cap: None,
-        };
-        let res = instantiate(deps.as_mut(), env, info, instantiate_msg).unwrap();
-        assert_eq!(0, res.messages.len());
-        assert_eq!(
-            query_token_info(deps.as_ref()).unwrap(),
-            TokenInfoResponse {
-                name: "Bash Shell".to_string(),
-                symbol: "BASH".to_string(),
-                decimals: 6,
-                total_supply: amount1 + amount2,
-            }
-        );
-        assert_eq!(get_balance(deps.as_ref(), addr1), amount1);
-        assert_eq!(get_balance(deps.as_ref(), addr2), amount2);
-    }
-
-    #[test]
     fn queries_work() {
         let mut deps = mock_dependencies_with_balance(&coins(2, "token"));
         let addr1 = String::from("addr0001");
         let amount1 = Uint128::from(12340000u128);
 
-        let expected = do_instantiate(deps.as_mut(), &addr1, amount1);
+        let expected = do_instantiate(deps.as_mut());
 
         // check meta query
         let loaded = query_token_info(deps.as_ref()).unwrap();
@@ -1052,6 +949,17 @@ mod tests {
         .unwrap();
         let loaded: BalanceResponse = from_binary(&data).unwrap();
         assert_eq!(loaded.balance, Uint128::zero());
+
+        // query_asset
+        // query_total_assets
+        // query_convert_to_assets
+        // query_convert_to_shares
+        // query_preview_withdraw
+        // query_preview_deposit
+        // query_preview_redeem
+        // query_max_deposit
+        // query_max_withdraw
+        // query_max_redeem
     }
 
     #[test]
@@ -1063,7 +971,7 @@ mod tests {
         let transfer = Uint128::from(76543u128);
         let too_much = Uint128::from(12340321u128);
 
-        do_instantiate(deps.as_mut(), &addr1, amount1);
+        do_instantiate(deps.as_mut());
 
         // cannot transfer nothing
         let info = mock_info(addr1.as_ref(), &[]);
@@ -1121,9 +1029,9 @@ mod tests {
         fn update_unauthorised() {
             let mut deps = mock_dependencies();
             let instantiate_msg = InstantiateMsg {
-                name: "Cash Token".to_string(),
-                symbol: "CASH".to_string(),
-                decimals: 9,
+                name: "Vault Token".to_string(),
+                symbol: "VTKN".to_string(),
+                decimals: 6,
                 marketing: Some(InstantiateMarketingInfo {
                     project: Some("Project".to_owned()),
                     description: Some("Description".to_owned()),
@@ -1175,9 +1083,9 @@ mod tests {
         fn update_project() {
             let mut deps = mock_dependencies();
             let instantiate_msg = InstantiateMsg {
-                name: "Cash Token".to_string(),
-                symbol: "CASH".to_string(),
-                decimals: 9,
+                name: "Vault Token".to_string(),
+                symbol: "VTKN".to_string(),
+                decimals: 6,
                 marketing: Some(InstantiateMarketingInfo {
                     project: Some("Project".to_owned()),
                     description: Some("Description".to_owned()),
@@ -1228,9 +1136,9 @@ mod tests {
         fn clear_project() {
             let mut deps = mock_dependencies();
             let instantiate_msg = InstantiateMsg {
-                name: "Cash Token".to_string(),
-                symbol: "CASH".to_string(),
-                decimals: 9,
+                name: "Vault Token".to_string(),
+                symbol: "VTKN".to_string(),
+                decimals: 6,
                 marketing: Some(InstantiateMarketingInfo {
                     project: Some("Project".to_owned()),
                     description: Some("Description".to_owned()),
@@ -1281,9 +1189,9 @@ mod tests {
         fn update_description() {
             let mut deps = mock_dependencies();
             let instantiate_msg = InstantiateMsg {
-                name: "Cash Token".to_string(),
-                symbol: "CASH".to_string(),
-                decimals: 9,
+                name: "Vault Token".to_string(),
+                symbol: "VTKN".to_string(),
+                decimals: 6,
                 marketing: Some(InstantiateMarketingInfo {
                     project: Some("Project".to_owned()),
                     description: Some("Description".to_owned()),
@@ -1334,9 +1242,9 @@ mod tests {
         fn clear_description() {
             let mut deps = mock_dependencies();
             let instantiate_msg = InstantiateMsg {
-                name: "Cash Token".to_string(),
-                symbol: "CASH".to_string(),
-                decimals: 9,
+                name: "Vault Token".to_string(),
+                symbol: "VTKN".to_string(),
+                decimals: 6,
                 marketing: Some(InstantiateMarketingInfo {
                     project: Some("Project".to_owned()),
                     description: Some("Description".to_owned()),
@@ -1387,9 +1295,9 @@ mod tests {
         fn update_marketing() {
             let mut deps = mock_dependencies();
             let instantiate_msg = InstantiateMsg {
-                name: "Cash Token".to_string(),
-                symbol: "CASH".to_string(),
-                decimals: 9,
+                name: "Vault Token".to_string(),
+                symbol: "VTKN".to_string(),
+                decimals: 6,
                 marketing: Some(InstantiateMarketingInfo {
                     project: Some("Project".to_owned()),
                     description: Some("Description".to_owned()),
@@ -1440,9 +1348,9 @@ mod tests {
         fn update_marketing_invalid() {
             let mut deps = mock_dependencies();
             let instantiate_msg = InstantiateMsg {
-                name: "Cash Token".to_string(),
-                symbol: "CASH".to_string(),
-                decimals: 9,
+                name: "Vault Token".to_string(),
+                symbol: "VTKN".to_string(),
+                decimals: 6,
                 marketing: Some(InstantiateMarketingInfo {
                     project: Some("Project".to_owned()),
                     description: Some("Description".to_owned()),
@@ -1497,9 +1405,9 @@ mod tests {
         fn clear_marketing() {
             let mut deps = mock_dependencies();
             let instantiate_msg = InstantiateMsg {
-                name: "Cash Token".to_string(),
-                symbol: "CASH".to_string(),
-                decimals: 9,
+                name: "Vault Token".to_string(),
+                symbol: "VTKN".to_string(),
+                decimals: 6,
                 marketing: Some(InstantiateMarketingInfo {
                     project: Some("Project".to_owned()),
                     description: Some("Description".to_owned()),
@@ -1550,9 +1458,9 @@ mod tests {
         fn update_logo_url() {
             let mut deps = mock_dependencies();
             let instantiate_msg = InstantiateMsg {
-                name: "Cash Token".to_string(),
-                symbol: "CASH".to_string(),
-                decimals: 9,
+                name: "Vault Token".to_string(),
+                symbol: "VTKN".to_string(),
+                decimals: 6,
                 marketing: Some(InstantiateMarketingInfo {
                     project: Some("Project".to_owned()),
                     description: Some("Description".to_owned()),
@@ -1599,9 +1507,9 @@ mod tests {
         fn update_logo_png() {
             let mut deps = mock_dependencies();
             let instantiate_msg = InstantiateMsg {
-                name: "Cash Token".to_string(),
-                symbol: "CASH".to_string(),
-                decimals: 9,
+                name: "Vault Token".to_string(),
+                symbol: "VTKN".to_string(),
+                decimals: 6,
                 marketing: Some(InstantiateMarketingInfo {
                     project: Some("Project".to_owned()),
                     description: Some("Description".to_owned()),
@@ -1649,9 +1557,9 @@ mod tests {
         fn update_logo_svg() {
             let mut deps = mock_dependencies();
             let instantiate_msg = InstantiateMsg {
-                name: "Cash Token".to_string(),
-                symbol: "CASH".to_string(),
-                decimals: 9,
+                name: "Vault Token".to_string(),
+                symbol: "VTKN".to_string(),
+                decimals: 6,
                 marketing: Some(InstantiateMarketingInfo {
                     project: Some("Project".to_owned()),
                     description: Some("Description".to_owned()),
@@ -1700,9 +1608,9 @@ mod tests {
         fn update_logo_png_oversized() {
             let mut deps = mock_dependencies();
             let instantiate_msg = InstantiateMsg {
-                name: "Cash Token".to_string(),
-                symbol: "CASH".to_string(),
-                decimals: 9,
+                name: "Vault Token".to_string(),
+                symbol: "VTKN".to_string(),
+                decimals: 6,
                 marketing: Some(InstantiateMarketingInfo {
                     project: Some("Project".to_owned()),
                     description: Some("Description".to_owned()),
@@ -1750,9 +1658,9 @@ mod tests {
         fn update_logo_svg_oversized() {
             let mut deps = mock_dependencies();
             let instantiate_msg = InstantiateMsg {
-                name: "Cash Token".to_string(),
-                symbol: "CASH".to_string(),
-                decimals: 9,
+                name: "Vault Token".to_string(),
+                symbol: "VTKN".to_string(),
+                decimals: 6,
                 marketing: Some(InstantiateMarketingInfo {
                     project: Some("Project".to_owned()),
                     description: Some("Description".to_owned()),
@@ -1807,9 +1715,9 @@ mod tests {
         fn update_logo_png_invalid() {
             let mut deps = mock_dependencies();
             let instantiate_msg = InstantiateMsg {
-                name: "Cash Token".to_string(),
-                symbol: "CASH".to_string(),
-                decimals: 9,
+                name: "Vault Token".to_string(),
+                symbol: "VTKN".to_string(),
+                decimals: 6,
                 marketing: Some(InstantiateMarketingInfo {
                     project: Some("Project".to_owned()),
                     description: Some("Description".to_owned()),
@@ -1857,9 +1765,9 @@ mod tests {
         fn update_logo_svg_invalid() {
             let mut deps = mock_dependencies();
             let instantiate_msg = InstantiateMsg {
-                name: "Cash Token".to_string(),
-                symbol: "CASH".to_string(),
-                decimals: 9,
+                name: "Vault Token".to_string(),
+                symbol: "VTKN".to_string(),
+                decimals: 6,
                 marketing: Some(InstantiateMarketingInfo {
                     project: Some("Project".to_owned()),
                     description: Some("Description".to_owned()),
