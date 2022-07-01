@@ -56,6 +56,8 @@ pub enum QueryMsg {
     LatestStage {},
     IsClaimed { stage: u8, address: String },
     TotalClaimed { stage: u8 },
+    // for cross chain airdrops, maps target account to host account
+    AccountMap { stage: u8, external_address: String },
 }
 
 #[derive(Serialize, Deserialize, Clone, PartialEq, JsonSchema, Debug)]
@@ -89,6 +91,12 @@ pub struct IsClaimedResponse {
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 pub struct TotalClaimedResponse {
     pub total_claimed: Uint128,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+pub struct AccountMapResponse {
+    pub host_address: String,
+    pub external_address: String,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]

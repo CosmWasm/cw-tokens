@@ -13,12 +13,13 @@ use std::convert::TryInto;
 use crate::error::ContractError;
 use crate::helpers;
 use crate::msg::{
-    ConfigResponse, ExecuteMsg, InstantiateMsg, IsClaimedResponse, LatestStageResponse,
-    MerkleRootResponse, MigrateMsg, QueryMsg, SignatureInfo, TotalClaimedResponse,
+    AccountMapResponse, ConfigResponse, ExecuteMsg, InstantiateMsg, IsClaimedResponse,
+    LatestStageResponse, MerkleRootResponse, MigrateMsg, QueryMsg, SignatureInfo,
+    TotalClaimedResponse,
 };
 use crate::state::{
-    Config, CLAIM, CONFIG, HRP, LATEST_STAGE, MERKLE_ROOT, STAGE_AMOUNT, STAGE_AMOUNT_CLAIMED,
-    STAGE_EXPIRATION, STAGE_START,
+    Config, CLAIM, CONFIG, HRP, LATEST_STAGE, MERKLE_ROOT, STAGE_ACCOUNT_MAP, STAGE_AMOUNT,
+    STAGE_AMOUNT_CLAIMED, STAGE_EXPIRATION, STAGE_START,
 };
 
 // Version info, for migration info
@@ -227,7 +228,16 @@ pub fn execute_claim(
         None => info.sender.to_string(),
         Some(sig) => {
             let hrp = HRP.load(deps.storage, stage)?;
-            helpers::verify_external_address(&deps, &info, hrp, &sig)?
+            let addr = helpers::verify_external_address(&deps, &info, hrp, &sig)?;
+
+            // Save external address index
+            STAGE_ACCOUNT_MAP.save(
+                deps.storage,
+                (stage, addr.clone()),
+                &info.sender.to_string(),
+            )?;
+
+            addr
         }
     };
 
@@ -469,6 +479,10 @@ pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
             to_binary(&query_is_claimed(deps, stage, address)?)
         }
         QueryMsg::TotalClaimed { stage } => to_binary(&query_total_claimed(deps, stage)?),
+        QueryMsg::AccountMap {
+            stage,
+            external_address,
+        } => to_binary(&query_address_map(deps, stage, external_address)?),
     }
 }
 
@@ -517,6 +531,20 @@ pub fn query_is_claimed(deps: Deps, stage: u8, address: String) -> StdResult<IsC
 pub fn query_total_claimed(deps: Deps, stage: u8) -> StdResult<TotalClaimedResponse> {
     let total_claimed = STAGE_AMOUNT_CLAIMED.load(deps.storage, stage)?;
     let resp = TotalClaimedResponse { total_claimed };
+
+    Ok(resp)
+}
+
+pub fn query_address_map(
+    deps: Deps,
+    stage: u8,
+    external_address: String,
+) -> StdResult<AccountMapResponse> {
+    let host_address = STAGE_ACCOUNT_MAP.load(deps.storage, (stage, external_address.clone()))?;
+    let resp = AccountMapResponse {
+        host_address,
+        external_address,
+    };
 
     Ok(resp)
 }
@@ -1951,6 +1979,8 @@ mod tests {
             let info = mock_info(claim_addr.as_str(), &[]);
             let res = execute(deps.as_mut(), env, info, msg).unwrap_err();
             assert_eq!(res, ContractError::VerificationFailed {});
+
+            // stage account map is not saved
 
             // can claim with sig
             let msg = ExecuteMsg::Claim {

@@ -31,6 +31,10 @@ pub const STAGE_AMOUNT: Map<u8, Uint128> = Map::new(STAGE_AMOUNT_KEY);
 pub const STAGE_AMOUNT_CLAIMED_KEY: &str = "stage_claimed_amount";
 pub const STAGE_AMOUNT_CLAIMED: Map<u8, Uint128> = Map::new(STAGE_AMOUNT_CLAIMED_KEY);
 
+// saves external network airdrop accounts
+pub const STAGE_ACCOUNT_MAP_KEY: &str = "stage_account_map";
+pub const STAGE_ACCOUNT_MAP: Map<(u8, String), String> = Map::new(STAGE_ACCOUNT_MAP_KEY);
+
 pub const MERKLE_ROOT_PREFIX: &str = "merkle_root";
 pub const MERKLE_ROOT: Map<u8, String> = Map::new(MERKLE_ROOT_PREFIX);
 
