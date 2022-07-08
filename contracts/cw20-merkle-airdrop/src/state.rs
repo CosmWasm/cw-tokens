@@ -45,5 +45,5 @@ pub const CLAIM: Map<(String, u8), bool> = Map::new(CLAIM_PREFIX);
 pub const CLAIMED_AMOUNT_PREFIX: &str = "claimed_amount";
 pub const CLAIMED_AMOUNT: Map<(&Addr, u8), bool> = Map::new(CLAIMED_AMOUNT_PREFIX);
 
-pub const HRP_PREFIX: &str = "claimed_amount";
+pub const HRP_PREFIX: &str = "hrp";
 pub const HRP: Map<u8, String> = Map::new(HRP_PREFIX);
