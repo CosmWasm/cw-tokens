@@ -1,12 +1,12 @@
+use crate::enumerable::query_all_address_map;
 #[cfg(not(feature = "library"))]
 use cosmwasm_std::entry_point;
 use cosmwasm_std::{
     attr, from_binary, to_binary, Addr, BankMsg, Binary, Coin, CosmosMsg, Deps, DepsMut, Env,
-    MessageInfo, Order, Response, StdResult, Uint128,
+    MessageInfo, Response, StdResult, Uint128,
 };
 use cw2::{get_contract_version, set_contract_version};
 use cw20::{Cw20Contract, Cw20ExecuteMsg};
-use cw_storage_plus::Bound;
 use cw_utils::{Expiration, Scheduled};
 use sha2::Digest;
 use std::convert::TryInto;
@@ -15,8 +15,8 @@ use crate::error::ContractError;
 use crate::helpers::CosmosSignature;
 use crate::msg::{
     AccountMapResponse, ConfigResponse, ExecuteMsg, InstantiateMsg, IsClaimedResponse,
-    LatestStageResponse, ListAccountMapResponse, MerkleRootResponse, MigrateMsg, QueryMsg,
-    SignatureInfo, TotalClaimedResponse,
+    LatestStageResponse, MerkleRootResponse, MigrateMsg, QueryMsg, SignatureInfo,
+    TotalClaimedResponse,
 };
 use crate::state::{
     Config, CLAIM, CONFIG, HRP, LATEST_STAGE, MERKLE_ROOT, STAGE_ACCOUNT_MAP, STAGE_AMOUNT,
@@ -494,6 +494,11 @@ pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
             stage,
             external_address,
         } => to_binary(&query_address_map(deps, stage, external_address)?),
+        QueryMsg::AllAccountMaps {
+            stage,
+            start_after,
+            limit,
+        } => to_binary(&query_all_address_map(deps, stage, start_after, limit)?),
     }
 }
 
@@ -557,35 +562,6 @@ pub fn query_address_map(
         external_address,
     };
 
-    Ok(resp)
-}
-
-// settings for pagination
-const MAX_LIMIT: u32 = 1000;
-const DEFAULT_LIMIT: u32 = 10;
-
-pub fn list_address_map(
-    deps: Deps,
-    stage: u8,
-    start_after: Option<String>,
-    limit: Option<u32>,
-) -> StdResult<ListAccountMapResponse> {
-    let limit = limit.unwrap_or(DEFAULT_LIMIT).min(MAX_LIMIT) as usize;
-    let start = start_after.map(Bound::exclusive);
-
-    let address_maps = STAGE_ACCOUNT_MAP
-        .prefix(stage)
-        .range(deps.storage, start, None, Order::Ascending)
-        .take(limit)
-        .map(|p| {
-            p.map(|(external_address, host_address)| AccountMapResponse {
-                host_address,
-                external_address,
-            })
-        })
-        .collect::<StdResult<_>>()?;
-
-    let resp = ListAccountMapResponse { address_maps };
     Ok(resp)
 }
 

@@ -53,12 +53,27 @@ pub enum ExecuteMsg {
 #[serde(rename_all = "snake_case")]
 pub enum QueryMsg {
     Config {},
-    MerkleRoot { stage: u8 },
+    MerkleRoot {
+        stage: u8,
+    },
     LatestStage {},
-    IsClaimed { stage: u8, address: String },
-    TotalClaimed { stage: u8 },
+    IsClaimed {
+        stage: u8,
+        address: String,
+    },
+    TotalClaimed {
+        stage: u8,
+    },
     // for cross chain airdrops, maps target account to host account
-    AccountMap { stage: u8, external_address: String },
+    AccountMap {
+        stage: u8,
+        external_address: String,
+    },
+    AllAccountMaps {
+        stage: u8,
+        start_after: Option<String>,
+        limit: Option<u32>,
+    },
 }
 
 #[derive(Serialize, Deserialize, Clone, PartialEq, JsonSchema, Debug)]
@@ -101,7 +116,7 @@ pub struct AccountMapResponse {
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
-pub struct ListAccountMapResponse {
+pub struct AllAccountMapResponse {
     pub address_maps: Vec<AccountMapResponse>,
 }
 
