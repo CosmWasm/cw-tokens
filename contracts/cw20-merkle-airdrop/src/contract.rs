@@ -1,8 +1,8 @@
 #[cfg(not(feature = "library"))]
 use cosmwasm_std::entry_point;
 use cosmwasm_std::{
-    attr, to_binary, Addr, BankMsg, Binary, Coin, CosmosMsg, Deps, DepsMut, Env, MessageInfo,
-    Order, Response, StdResult, Uint128,
+    attr, from_binary, to_binary, Addr, BankMsg, Binary, Coin, CosmosMsg, Deps, DepsMut, Env,
+    MessageInfo, Order, Response, StdResult, Uint128,
 };
 use cw2::{get_contract_version, set_contract_version};
 use cw20::{Cw20Contract, Cw20ExecuteMsg};
@@ -12,7 +12,7 @@ use sha2::Digest;
 use std::convert::TryInto;
 
 use crate::error::ContractError;
-use crate::helpers;
+use crate::helpers::CosmosSignature;
 use crate::msg::{
     AccountMapResponse, ConfigResponse, ExecuteMsg, InstantiateMsg, IsClaimedResponse,
     LatestStageResponse, ListAccountMapResponse, MerkleRootResponse, MigrateMsg, QueryMsg,
@@ -224,21 +224,31 @@ pub fn execute_claim(
     }
 
     // if present verify signature and extract external address or use info.sender as proof
-    // If not info.sender is not present in the root, verification will fail
+    // if signature is not present in the message, verification will fail since info.sender is not present in the merkle root
     let proof_addr = match sig_info {
         None => info.sender.to_string(),
         Some(sig) => {
+            // verify signature
+            let cosmos_signature: CosmosSignature = from_binary(&sig.signature)?;
+            cosmos_signature.verify(deps.as_ref(), &sig.claim_msg)?;
+
+            // get airdrop stage bech32 prefix and derive proof address from public key.
             let hrp = HRP.load(deps.storage, stage)?;
-            let addr = helpers::verify_external_address(&deps, &info, hrp, &sig)?;
+            let proof_addr = cosmos_signature.derive_addr_from_pubkey(hrp.as_str())?;
+
+            // verify claimer address is sender
+            if sig.claim_msg.addr != info.sender {
+                return Err(ContractError::VerificationFailed {});
+            }
 
             // Save external address index
             STAGE_ACCOUNT_MAP.save(
                 deps.storage,
-                (stage, addr.clone()),
+                (stage, proof_addr.clone()),
                 &info.sender.to_string(),
             )?;
 
-            addr
+            proof_addr
         }
     };
 
@@ -593,7 +603,6 @@ pub fn migrate(deps: DepsMut, _env: Env, _msg: MigrateMsg) -> Result<Response, C
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::helpers::verify_external_address;
     use crate::msg::SignedClaimMsg;
     use cosmwasm_std::testing::{
         mock_dependencies, mock_dependencies_with_balance, mock_env, mock_info,
@@ -1950,10 +1959,8 @@ mod tests {
             include_bytes!("../testdata/airdrop_external_sig_test_data.json");
 
         #[test]
-        fn test_external_sig_verification() {
-            let mut deps = mock_dependencies();
-            let info = mock_info("juno1purt0lem029gcsfzpdnxwmnmeuc7xwz8gnt99x", &[]);
-
+        fn test_cosmos_sig_verify() {
+            let deps = mock_dependencies();
             let signature_raw = Binary::from_base64("eyJwdWJfa2V5IjoiQTNrUXU1cThkVm9JYUFXS0psdkFtKzdkbG1uRmFMQTl2Tm4wbmZuL25qUjUiLCJzaWduYXR1cmUiOiJEZWRqRTVpM3JpVmxLVi9mbU9PaGx5SDdRR2toUzZWcUV0d01maW9DZldWbGp0RmpXa2c2SmlOTUtwbmh5dUIzSFR3VTltU3paRXZ4VXhINHprcG5WZz09In0=");
 
             let sig = SignatureInfo {
@@ -1962,9 +1969,29 @@ mod tests {
                 },
                 signature: signature_raw.unwrap(),
             };
-            let addr =
-                verify_external_address(&deps.as_mut(), &info, "terra".to_string(), &sig).unwrap();
-            assert_eq!(addr, "terra1ce2uyed946x9r9dejutepqg0myqaudwlz58uw9");
+            let cosmos_signature: CosmosSignature = from_binary(&sig.signature).unwrap();
+            let res = cosmos_signature
+                .verify(deps.as_ref(), &sig.claim_msg)
+                .unwrap();
+            assert!(res);
+        }
+
+        #[test]
+        fn test_derive_addr_from_pubkey() {
+            let deps = mock_dependencies();
+            let signature_raw = Binary::from_base64("eyJwdWJfa2V5IjoiQTNrUXU1cThkVm9JYUFXS0psdkFtKzdkbG1uRmFMQTl2Tm4wbmZuL25qUjUiLCJzaWduYXR1cmUiOiJEZWRqRTVpM3JpVmxLVi9mbU9PaGx5SDdRR2toUzZWcUV0d01maW9DZldWbGp0RmpXa2c2SmlOTUtwbmh5dUIzSFR3VTltU3paRXZ4VXhINHprcG5WZz09In0=");
+
+            let sig = SignatureInfo {
+                claim_msg: SignedClaimMsg {
+                    addr: "juno1purt0lem029gcsfzpdnxwmnmeuc7xwz8gnt99x".to_string(),
+                },
+                signature: signature_raw.unwrap(),
+            };
+            let cosmos_signature: CosmosSignature = from_binary(&sig.signature).unwrap();
+            let res = cosmos_signature
+                .verify(deps.as_ref(), &sig.claim_msg)
+                .unwrap();
+            assert!(res);
         }
 
         #[test]

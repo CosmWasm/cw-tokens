@@ -28,7 +28,8 @@ pub enum ExecuteMsg {
         expiration: Option<Expiration>,
         start: Option<Scheduled>,
         total_amount: Option<Uint128>,
-        // hrp is bech32 prefix. Required for external network airdrop proof verification
+        // hrp is the bech32 parameter required for building external network address
+        // from signature message during claim action. example "cosmos", "terra", "juno"
         hrp: Option<String>,
     },
     /// Claim does not check if contract has enough funds, owner must ensure it.
@@ -107,10 +108,9 @@ pub struct ListAccountMapResponse {
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 pub struct MigrateMsg {}
 
-// Signature check is done on claim if the value is present in the context
+// Signature verification is done on external airdrop claims.
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 pub struct SignatureInfo {
-    /// Owner If None set, contract is frozen.
     pub claim_msg: SignedClaimMsg,
     pub signature: Binary,
 }
