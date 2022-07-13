@@ -232,7 +232,7 @@ pub fn execute_claim(
             let cosmos_signature: CosmosSignature = from_binary(&sig.signature)?;
             cosmos_signature.verify(deps.as_ref(), &sig.claim_msg)?;
 
-            // get airdrop stage bech32 prefix and derive proof address from public key.
+            // get airdrop stage bech32 prefix and derive proof address from public key
             let hrp = HRP.load(deps.storage, stage)?;
             let proof_addr = cosmos_signature.derive_addr_from_pubkey(hrp.as_str())?;
 
