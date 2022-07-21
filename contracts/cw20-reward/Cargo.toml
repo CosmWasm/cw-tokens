@@ -1,0 +1,35 @@
+[package]
+name = "cw20-reward"
+version = "0.11.1"
+authors = ["MSNTCS <mohammad@terra.money>", "orkun kulce <orkun@deuslabs.fi>"]
+edition = "2018"
+description= "cw20 reward distribution smart contract based on stake"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/CosmWasm/cw-tokens/contracts/cw20-reward"
+exclude = [
+  "contract.wasm",
+  "hash.txt",
+]
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[features]
+# for more explicit tests, cargo test --features=backtraces
+backtraces = ["cosmwasm-std/backtraces"]
+library = []
+
+[dependencies]
+cw0 = "0.10"
+cw20 = "0.11"
+cosmwasm-std = { version = "1.0.0-beta", features = ["iterator"] }
+cw-storage-plus = { version = "0.11", features = ["iterator"]}
+cw-controllers = "0.11"
+cw-multi-test = "0.11"
+schemars = "0.8"
+serde = { version = "1.0", default-features = false, features = ["derive"] }
+thiserror = "1.0"
+
+[dev-dependencies]
+cosmwasm-schema = { version = "1.0.0-beta", default-features = false }
+cw20-base = "0.11"
