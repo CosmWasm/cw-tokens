@@ -1,7 +1,7 @@
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
-use cosmwasm_std::Uint128;
+use cosmwasm_std::{Binary, Uint128};
 use cw_utils::{Expiration, Scheduled};
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
@@ -28,6 +28,9 @@ pub enum ExecuteMsg {
         expiration: Option<Expiration>,
         start: Option<Scheduled>,
         total_amount: Option<Uint128>,
+        // hrp is the bech32 parameter required for building external network address
+        // from signature message during claim action. example "cosmos", "terra", "juno"
+        hrp: Option<String>,
     },
     /// Claim does not check if contract has enough funds, owner must ensure it.
     Claim {
@@ -35,6 +38,10 @@ pub enum ExecuteMsg {
         amount: Uint128,
         /// Proof is hex-encoded merkle proof.
         proof: Vec<String>,
+        /// Enables cross chain airdrops.
+        /// Target wallet proves identity by sending a signed [SignedClaimMsg](SignedClaimMsg)
+        /// containing the recipient address.
+        sig_info: Option<SignatureInfo>,
     },
     /// Burn the remaining tokens after expire time (only owner)
     Burn { stage: u8 },
@@ -46,10 +53,27 @@ pub enum ExecuteMsg {
 #[serde(rename_all = "snake_case")]
 pub enum QueryMsg {
     Config {},
-    MerkleRoot { stage: u8 },
+    MerkleRoot {
+        stage: u8,
+    },
     LatestStage {},
-    IsClaimed { stage: u8, address: String },
-    TotalClaimed { stage: u8 },
+    IsClaimed {
+        stage: u8,
+        address: String,
+    },
+    TotalClaimed {
+        stage: u8,
+    },
+    // for cross chain airdrops, maps target account to host account
+    AccountMap {
+        stage: u8,
+        external_address: String,
+    },
+    AllAccountMaps {
+        stage: u8,
+        start_after: Option<String>,
+        limit: Option<u32>,
+    },
 }
 
 #[derive(Serialize, Deserialize, Clone, PartialEq, JsonSchema, Debug)]
@@ -86,4 +110,27 @@ pub struct TotalClaimedResponse {
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+pub struct AccountMapResponse {
+    pub host_address: String,
+    pub external_address: String,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+pub struct AllAccountMapResponse {
+    pub address_maps: Vec<AccountMapResponse>,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 pub struct MigrateMsg {}
+
+// Signature verification is done on external airdrop claims.
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+pub struct SignatureInfo {
+    pub claim_msg: SignedClaimMsg,
+    pub signature: Binary,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+pub struct SignedClaimMsg {
+    pub addr: String,
+}

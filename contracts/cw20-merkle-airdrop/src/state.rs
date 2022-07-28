@@ -31,11 +31,19 @@ pub const STAGE_AMOUNT: Map<u8, Uint128> = Map::new(STAGE_AMOUNT_KEY);
 pub const STAGE_AMOUNT_CLAIMED_KEY: &str = "stage_claimed_amount";
 pub const STAGE_AMOUNT_CLAIMED: Map<u8, Uint128> = Map::new(STAGE_AMOUNT_CLAIMED_KEY);
 
+// saves external network airdrop accounts
+pub const STAGE_ACCOUNT_MAP_KEY: &str = "stage_account_map";
+// (stage, external_address) -> host_address
+pub const STAGE_ACCOUNT_MAP: Map<(u8, String), String> = Map::new(STAGE_ACCOUNT_MAP_KEY);
+
 pub const MERKLE_ROOT_PREFIX: &str = "merkle_root";
 pub const MERKLE_ROOT: Map<u8, String> = Map::new(MERKLE_ROOT_PREFIX);
 
 pub const CLAIM_PREFIX: &str = "claim";
-pub const CLAIM: Map<(&Addr, u8), bool> = Map::new(CLAIM_PREFIX);
+pub const CLAIM: Map<(String, u8), bool> = Map::new(CLAIM_PREFIX);
 
 pub const CLAIMED_AMOUNT_PREFIX: &str = "claimed_amount";
 pub const CLAIMED_AMOUNT: Map<(&Addr, u8), bool> = Map::new(CLAIMED_AMOUNT_PREFIX);
+
+pub const HRP_PREFIX: &str = "hrp";
+pub const HRP: Map<u8, String> = Map::new(HRP_PREFIX);

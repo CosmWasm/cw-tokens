@@ -1,8 +1,9 @@
+use crate::enumerable::query_all_address_map;
 #[cfg(not(feature = "library"))]
 use cosmwasm_std::entry_point;
 use cosmwasm_std::{
-    attr, to_binary, Addr, BankMsg, Binary, Coin, CosmosMsg, Deps, DepsMut, Env, MessageInfo,
-    Response, StdResult, Uint128,
+    attr, from_binary, to_binary, Addr, BankMsg, Binary, Coin, CosmosMsg, Deps, DepsMut, Env,
+    MessageInfo, Response, StdResult, Uint128,
 };
 use cw2::{get_contract_version, set_contract_version};
 use cw20::{Cw20Contract, Cw20ExecuteMsg};
@@ -11,13 +12,15 @@ use sha2::Digest;
 use std::convert::TryInto;
 
 use crate::error::ContractError;
+use crate::helpers::CosmosSignature;
 use crate::msg::{
-    ConfigResponse, ExecuteMsg, InstantiateMsg, IsClaimedResponse, LatestStageResponse,
-    MerkleRootResponse, MigrateMsg, QueryMsg, TotalClaimedResponse,
+    AccountMapResponse, ConfigResponse, ExecuteMsg, InstantiateMsg, IsClaimedResponse,
+    LatestStageResponse, MerkleRootResponse, MigrateMsg, QueryMsg, SignatureInfo,
+    TotalClaimedResponse,
 };
 use crate::state::{
-    Config, CLAIM, CONFIG, LATEST_STAGE, MERKLE_ROOT, STAGE_AMOUNT, STAGE_AMOUNT_CLAIMED,
-    STAGE_EXPIRATION, STAGE_START,
+    Config, CLAIM, CONFIG, HRP, LATEST_STAGE, MERKLE_ROOT, STAGE_ACCOUNT_MAP, STAGE_AMOUNT,
+    STAGE_AMOUNT_CLAIMED, STAGE_EXPIRATION, STAGE_START,
 };
 
 // Version info, for migration info
@@ -70,6 +73,7 @@ pub fn execute(
             expiration,
             start,
             total_amount,
+            hrp,
         } => execute_register_merkle_root(
             deps,
             env,
@@ -78,12 +82,14 @@ pub fn execute(
             expiration,
             start,
             total_amount,
+            hrp,
         ),
         ExecuteMsg::Claim {
             stage,
             amount,
             proof,
-        } => execute_claim(deps, env, info, stage, amount, proof),
+            sig_info,
+        } => execute_claim(deps, env, info, stage, amount, proof, sig_info),
         ExecuteMsg::Burn { stage } => execute_burn(deps, env, info, stage),
         ExecuteMsg::Withdraw { stage, address } => {
             execute_withdraw(deps, env, info, stage, address)
@@ -140,6 +146,7 @@ pub fn execute_update_config(
     Ok(Response::new().add_attribute("action", "update_config"))
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn execute_register_merkle_root(
     deps: DepsMut,
     _env: Env,
@@ -148,6 +155,7 @@ pub fn execute_register_merkle_root(
     expiration: Option<Expiration>,
     start: Option<Scheduled>,
     total_amount: Option<Uint128>,
+    hrp: Option<String>,
 ) -> Result<Response, ContractError> {
     let cfg = CONFIG.load(deps.storage)?;
 
@@ -175,6 +183,11 @@ pub fn execute_register_merkle_root(
         STAGE_START.save(deps.storage, stage, &start)?;
     }
 
+    // save hrp
+    if let Some(hrp) = hrp {
+        HRP.save(deps.storage, stage, &hrp)?;
+    }
+
     // save total airdropped amount
     let amount = total_amount.unwrap_or_else(Uint128::zero);
     STAGE_AMOUNT.save(deps.storage, stage, &amount)?;
@@ -195,6 +208,7 @@ pub fn execute_claim(
     stage: u8,
     amount: Uint128,
     proof: Vec<String>,
+    sig_info: Option<SignatureInfo>,
 ) -> Result<Response, ContractError> {
     // airdrop begun
     let start = STAGE_START.may_load(deps.storage, stage)?;
@@ -209,16 +223,46 @@ pub fn execute_claim(
         return Err(ContractError::StageExpired { stage, expiration });
     }
 
+    // if present verify signature and extract external address or use info.sender as proof
+    // if signature is not present in the message, verification will fail since info.sender is not present in the merkle root
+    let proof_addr = match sig_info {
+        None => info.sender.to_string(),
+        Some(sig) => {
+            // verify signature
+            let cosmos_signature: CosmosSignature = from_binary(&sig.signature)?;
+            cosmos_signature.verify(deps.as_ref(), &sig.claim_msg)?;
+
+            // get airdrop stage bech32 prefix and derive proof address from public key
+            let hrp = HRP.load(deps.storage, stage)?;
+            let proof_addr = cosmos_signature.derive_addr_from_pubkey(hrp.as_str())?;
+
+            // verify claimer address is sender
+            if sig.claim_msg.addr != info.sender {
+                return Err(ContractError::VerificationFailed {});
+            }
+
+            // Save external address index
+            STAGE_ACCOUNT_MAP.save(
+                deps.storage,
+                (stage, proof_addr.clone()),
+                &info.sender.to_string(),
+            )?;
+
+            proof_addr
+        }
+    };
+
     // verify not claimed
-    let claimed = CLAIM.may_load(deps.storage, (&info.sender, stage))?;
+    let claimed = CLAIM.may_load(deps.storage, (proof_addr.clone(), stage))?;
     if claimed.is_some() {
         return Err(ContractError::Claimed {});
     }
 
+    // verify merkle root
     let config = CONFIG.load(deps.storage)?;
     let merkle_root = MERKLE_ROOT.load(deps.storage, stage)?;
 
-    let user_input = format!("{}{}", info.sender, amount);
+    let user_input = format!("{}{}", proof_addr, amount);
     let hash = sha2::Sha256::digest(user_input.as_bytes())
         .as_slice()
         .try_into()
@@ -242,7 +286,7 @@ pub fn execute_claim(
     }
 
     // Update claim index to the current stage
-    CLAIM.save(deps.storage, (&info.sender, stage), &true)?;
+    CLAIM.save(deps.storage, (proof_addr, stage), &true)?;
 
     // Update total claimed to reflect
     let mut claimed_amount = STAGE_AMOUNT_CLAIMED.load(deps.storage, stage)?;
@@ -283,7 +327,7 @@ pub fn execute_claim(
     let res = Response::new().add_message(message).add_attributes(vec![
         attr("action", "claim"),
         attr("stage", stage.to_string()),
-        attr("address", info.sender),
+        attr("address", info.sender.to_string()),
         attr("amount", amount),
     ]);
     Ok(res)
@@ -446,6 +490,15 @@ pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
             to_binary(&query_is_claimed(deps, stage, address)?)
         }
         QueryMsg::TotalClaimed { stage } => to_binary(&query_total_claimed(deps, stage)?),
+        QueryMsg::AccountMap {
+            stage,
+            external_address,
+        } => to_binary(&query_address_map(deps, stage, external_address)?),
+        QueryMsg::AllAccountMaps {
+            stage,
+            start_after,
+            limit,
+        } => to_binary(&query_all_address_map(deps, stage, start_after, limit)?),
     }
 }
 
@@ -483,8 +536,9 @@ pub fn query_latest_stage(deps: Deps) -> StdResult<LatestStageResponse> {
 }
 
 pub fn query_is_claimed(deps: Deps, stage: u8, address: String) -> StdResult<IsClaimedResponse> {
-    let key: (&Addr, u8) = (&deps.api.addr_validate(&address)?, stage);
-    let is_claimed = CLAIM.may_load(deps.storage, key)?.unwrap_or(false);
+    let is_claimed = CLAIM
+        .may_load(deps.storage, (address, stage))?
+        .unwrap_or(false);
     let resp = IsClaimedResponse { is_claimed };
 
     Ok(resp)
@@ -493,6 +547,20 @@ pub fn query_is_claimed(deps: Deps, stage: u8, address: String) -> StdResult<IsC
 pub fn query_total_claimed(deps: Deps, stage: u8) -> StdResult<TotalClaimedResponse> {
     let total_claimed = STAGE_AMOUNT_CLAIMED.load(deps.storage, stage)?;
     let resp = TotalClaimedResponse { total_claimed };
+
+    Ok(resp)
+}
+
+pub fn query_address_map(
+    deps: Deps,
+    stage: u8,
+    external_address: String,
+) -> StdResult<AccountMapResponse> {
+    let host_address = STAGE_ACCOUNT_MAP.load(deps.storage, (stage, external_address.clone()))?;
+    let resp = AccountMapResponse {
+        host_address,
+        external_address,
+    };
 
     Ok(resp)
 }
@@ -511,6 +579,7 @@ pub fn migrate(deps: DepsMut, _env: Env, _msg: MigrateMsg) -> Result<Response, C
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::msg::SignedClaimMsg;
     use cosmwasm_std::testing::{
         mock_dependencies, mock_dependencies_with_balance, mock_env, mock_info,
     };
@@ -688,6 +757,7 @@ mod tests {
             expiration: None,
             start: None,
             total_amount: None,
+            hrp: None,
         };
 
         let res = execute(deps.as_mut(), env.clone(), info, msg).unwrap();
@@ -732,6 +802,8 @@ mod tests {
         amount: Uint128,
         root: String,
         proofs: Vec<String>,
+        signed_msg: Option<SignatureInfo>,
+        hrp: Option<String>,
     }
 
     #[test]
@@ -757,6 +829,7 @@ mod tests {
             expiration: None,
             start: None,
             total_amount: None,
+            hrp: None,
         };
         let _res = execute(deps.as_mut(), env, info, msg).unwrap();
 
@@ -764,6 +837,7 @@ mod tests {
             amount: test_data.amount,
             stage: 1u8,
             proof: test_data.proofs,
+            sig_info: None,
         };
 
         let env = mock_env();
@@ -837,6 +911,7 @@ mod tests {
             expiration: None,
             start: None,
             total_amount: None,
+            hrp: None,
         };
         let _res = execute(deps.as_mut(), env, info, msg).unwrap();
 
@@ -845,6 +920,7 @@ mod tests {
             amount: test_data.amount,
             stage: 2u8,
             proof: test_data.proofs,
+            sig_info: None,
         };
 
         let env = mock_env();
@@ -880,6 +956,8 @@ mod tests {
             .total_claimed,
             test_data.amount
         );
+
+        // Drop stage three with external sigs
     }
 
     #[test]
@@ -908,6 +986,7 @@ mod tests {
             expiration: None,
             start: None,
             total_amount: None,
+            hrp: None,
         };
         let _res = execute(deps.as_mut(), env, info, msg).unwrap();
 
@@ -915,6 +994,7 @@ mod tests {
             amount: test_data.amount,
             stage: 1u8,
             proof: test_data.proofs,
+            sig_info: None,
         };
 
         let env = mock_env();
@@ -986,6 +1066,7 @@ mod tests {
             expiration: None,
             start: None,
             total_amount: None,
+            hrp: None,
         };
         let _res = execute(deps.as_mut(), env, info, msg).unwrap();
 
@@ -994,6 +1075,7 @@ mod tests {
             amount: test_data.amount,
             stage: 2u8,
             proof: test_data.proofs,
+            sig_info: None,
         };
 
         let env = mock_env();
@@ -1055,6 +1137,7 @@ mod tests {
             expiration: None,
             start: None,
             total_amount: None,
+            hrp: None,
         };
         let _res = execute(deps.as_mut(), env, info, msg).unwrap();
 
@@ -1062,6 +1145,7 @@ mod tests {
             amount: test_data.amount,
             stage: 1u8,
             proof: test_data.proofs,
+            sig_info: None,
         };
 
         let env = mock_env();
@@ -1116,6 +1200,7 @@ mod tests {
             expiration: None,
             start: None,
             total_amount: None,
+            hrp: None,
         };
         let _res = execute(deps.as_mut(), env, info, msg).unwrap();
 
@@ -1125,6 +1210,7 @@ mod tests {
                 amount: account.amount,
                 stage: 1u8,
                 proof: account.proofs.clone(),
+                sig_info: None,
             };
 
             let env = mock_env();
@@ -1190,6 +1276,7 @@ mod tests {
             expiration: None,
             start: None,
             total_amount: None,
+            hrp: None,
         };
         let _res = execute(deps.as_mut(), env, info, msg).unwrap();
 
@@ -1199,6 +1286,7 @@ mod tests {
                 amount: account.amount,
                 stage: 1u8,
                 proof: account.proofs.clone(),
+                sig_info: None,
             };
 
             let env = mock_env();
@@ -1260,6 +1348,7 @@ mod tests {
             expiration: Some(Expiration::AtHeight(100)),
             start: None,
             total_amount: None,
+            hrp: None,
         };
         execute(deps.as_mut(), env.clone(), info.clone(), msg).unwrap();
 
@@ -1268,6 +1357,7 @@ mod tests {
             amount: Uint128::new(5),
             stage: 1u8,
             proof: vec![],
+            sig_info: None,
         };
 
         let res = execute(deps.as_mut(), env, info, msg).unwrap_err();
@@ -1303,6 +1393,7 @@ mod tests {
             expiration: Some(Expiration::AtHeight(12346)),
             start: None,
             total_amount: Some(Uint128::new(100000)),
+            hrp: None,
         };
         execute(deps.as_mut(), env.clone(), info.clone(), msg).unwrap();
 
@@ -1340,6 +1431,7 @@ mod tests {
             expiration: Some(Expiration::AtHeight(12500)),
             start: None,
             total_amount: Some(Uint128::new(10000)),
+            hrp: None,
         };
         execute(deps.as_mut(), env.clone(), info, msg).unwrap();
 
@@ -1348,6 +1440,7 @@ mod tests {
             amount: test_data.amount,
             stage: 1u8,
             proof: test_data.proofs,
+            sig_info: None,
         };
 
         let info = mock_info(test_data.account.as_str(), &[]);
@@ -1428,6 +1521,7 @@ mod tests {
             expiration: Some(Expiration::AtHeight(12500)),
             start: None,
             total_amount: Some(Uint128::new(10000)),
+            hrp: None,
         };
         execute(deps.as_mut(), env.clone(), info, msg).unwrap();
 
@@ -1436,6 +1530,7 @@ mod tests {
             amount: test_data.amount,
             stage: 1u8,
             proof: test_data.proofs,
+            sig_info: None,
         };
 
         let info = mock_info(test_data.account.as_str(), &[]);
@@ -1510,6 +1605,7 @@ mod tests {
             expiration: Some(Expiration::AtHeight(12346)),
             start: None,
             total_amount: Some(Uint128::new(100000)),
+            hrp: None,
         };
         execute(deps.as_mut(), env.clone(), info.clone(), msg).unwrap();
 
@@ -1550,6 +1646,7 @@ mod tests {
             expiration: Some(Expiration::AtHeight(12500)),
             start: None,
             total_amount: Some(Uint128::new(10000)),
+            hrp: None,
         };
         execute(deps.as_mut(), env.clone(), info, msg).unwrap();
 
@@ -1558,6 +1655,7 @@ mod tests {
             amount: test_data.amount,
             stage: 1u8,
             proof: test_data.proofs,
+            sig_info: None,
         };
 
         let info = mock_info(test_data.account.as_str(), &[]);
@@ -1642,6 +1740,7 @@ mod tests {
             expiration: Some(Expiration::AtHeight(12500)),
             start: None,
             total_amount: Some(Uint128::new(10000)),
+            hrp: None,
         };
         execute(deps.as_mut(), env.clone(), info, msg).unwrap();
 
@@ -1650,6 +1749,7 @@ mod tests {
             amount: test_data.amount,
             stage: 1u8,
             proof: test_data.proofs,
+            sig_info: None,
         };
 
         let info = mock_info(test_data.account.as_str(), &[]);
@@ -1729,6 +1829,7 @@ mod tests {
             expiration: None,
             start: Some(Scheduled::AtHeight(200_000)),
             total_amount: None,
+            hrp: None,
         };
         execute(deps.as_mut(), env.clone(), info.clone(), msg).unwrap();
 
@@ -1737,6 +1838,7 @@ mod tests {
             amount: Uint128::new(5),
             stage: 1u8,
             proof: vec![],
+            sig_info: None,
         };
 
         let res = execute(deps.as_mut(), env, info, msg).unwrap_err();
@@ -1772,6 +1874,7 @@ mod tests {
             expiration: None,
             start: None,
             total_amount: None,
+            hrp: None,
         };
         let _res = execute(deps.as_mut(), env, info, msg).unwrap();
 
@@ -1808,6 +1911,7 @@ mod tests {
             expiration: None,
             start: None,
             total_amount: None,
+            hrp: None,
         };
         let res = execute(deps.as_mut(), env, info, msg).unwrap_err();
         assert_eq!(res, ContractError::Unauthorized {});
@@ -1822,5 +1926,177 @@ mod tests {
         };
         let res = execute(deps.as_mut(), env, info, msg).unwrap_err();
         assert_eq!(res, ContractError::Unauthorized {});
+    }
+
+    mod external_sig {
+        use super::*;
+
+        const TEST_DATA_EXTERNAL_SIG: &[u8] =
+            include_bytes!("../testdata/airdrop_external_sig_test_data.json");
+
+        #[test]
+        fn test_cosmos_sig_verify() {
+            let deps = mock_dependencies();
+            let signature_raw = Binary::from_base64("eyJwdWJfa2V5IjoiQTNrUXU1cThkVm9JYUFXS0psdkFtKzdkbG1uRmFMQTl2Tm4wbmZuL25qUjUiLCJzaWduYXR1cmUiOiJEZWRqRTVpM3JpVmxLVi9mbU9PaGx5SDdRR2toUzZWcUV0d01maW9DZldWbGp0RmpXa2c2SmlOTUtwbmh5dUIzSFR3VTltU3paRXZ4VXhINHprcG5WZz09In0=");
+
+            let sig = SignatureInfo {
+                claim_msg: SignedClaimMsg {
+                    addr: "juno1purt0lem029gcsfzpdnxwmnmeuc7xwz8gnt99x".to_string(),
+                },
+                signature: signature_raw.unwrap(),
+            };
+            let cosmos_signature: CosmosSignature = from_binary(&sig.signature).unwrap();
+            let res = cosmos_signature
+                .verify(deps.as_ref(), &sig.claim_msg)
+                .unwrap();
+            assert!(res);
+        }
+
+        #[test]
+        fn test_derive_addr_from_pubkey() {
+            let deps = mock_dependencies();
+            let signature_raw = Binary::from_base64("eyJwdWJfa2V5IjoiQTNrUXU1cThkVm9JYUFXS0psdkFtKzdkbG1uRmFMQTl2Tm4wbmZuL25qUjUiLCJzaWduYXR1cmUiOiJEZWRqRTVpM3JpVmxLVi9mbU9PaGx5SDdRR2toUzZWcUV0d01maW9DZldWbGp0RmpXa2c2SmlOTUtwbmh5dUIzSFR3VTltU3paRXZ4VXhINHprcG5WZz09In0=");
+
+            let sig = SignatureInfo {
+                claim_msg: SignedClaimMsg {
+                    addr: "juno1purt0lem029gcsfzpdnxwmnmeuc7xwz8gnt99x".to_string(),
+                },
+                signature: signature_raw.unwrap(),
+            };
+            let cosmos_signature: CosmosSignature = from_binary(&sig.signature).unwrap();
+            let res = cosmos_signature
+                .verify(deps.as_ref(), &sig.claim_msg)
+                .unwrap();
+            assert!(res);
+        }
+
+        #[test]
+        fn claim_with_external_sigs() {
+            let mut deps = mock_dependencies_with_balance(&[Coin {
+                denom: "ujunox".to_string(),
+                amount: Uint128::new(1234567),
+            }]);
+            let test_data: Encoded = from_slice(TEST_DATA_EXTERNAL_SIG).unwrap();
+            let claim_addr = test_data.signed_msg.clone().unwrap().claim_msg.addr;
+
+            let msg = InstantiateMsg {
+                owner: Some("owner0000".to_string()),
+                cw20_token_address: None,
+                native_token: Some("ujunox".to_string()),
+            };
+
+            let env = mock_env();
+            let info = mock_info("addr0000", &[]);
+            let _res = instantiate(deps.as_mut(), env, info, msg).unwrap();
+
+            let env = mock_env();
+            let info = mock_info("owner0000", &[]);
+            let msg = ExecuteMsg::RegisterMerkleRoot {
+                merkle_root: test_data.root,
+                expiration: None,
+                start: None,
+                total_amount: None,
+                hrp: Some(test_data.hrp.unwrap()),
+            };
+            let _res = execute(deps.as_mut(), env, info, msg).unwrap();
+
+            // cant claim without sig, info.sender is not present in the root
+            let msg = ExecuteMsg::Claim {
+                amount: test_data.amount,
+                stage: 1u8,
+                proof: test_data.proofs.clone(),
+                sig_info: None,
+            };
+
+            let env = mock_env();
+            let info = mock_info(claim_addr.as_str(), &[]);
+            let res = execute(deps.as_mut(), env, info, msg).unwrap_err();
+            assert_eq!(res, ContractError::VerificationFailed {});
+
+            // stage account map is not saved
+
+            // can claim with sig
+            let msg = ExecuteMsg::Claim {
+                amount: test_data.amount,
+                stage: 1u8,
+                proof: test_data.proofs,
+                sig_info: test_data.signed_msg,
+            };
+
+            let env = mock_env();
+            let info = mock_info(claim_addr.as_str(), &[]);
+            let res = execute(deps.as_mut(), env.clone(), info.clone(), msg.clone()).unwrap();
+            let expected = SubMsg::new(CosmosMsg::Bank(BankMsg::Send {
+                to_address: claim_addr.clone(),
+                amount: vec![Coin {
+                    denom: "ujunox".to_string(),
+                    amount: test_data.amount,
+                }],
+            }));
+
+            assert_eq!(res.messages, vec![expected]);
+            assert_eq!(
+                res.attributes,
+                vec![
+                    attr("action", "claim"),
+                    attr("stage", "1"),
+                    attr("address", claim_addr.clone()),
+                    attr("amount", test_data.amount),
+                ]
+            );
+
+            // Check total claimed on stage 1
+            assert_eq!(
+                from_binary::<TotalClaimedResponse>(
+                    &query(
+                        deps.as_ref(),
+                        env.clone(),
+                        QueryMsg::TotalClaimed { stage: 1 },
+                    )
+                    .unwrap()
+                )
+                .unwrap()
+                .total_claimed,
+                test_data.amount
+            );
+
+            // Check address is claimed
+            assert!(
+                from_binary::<IsClaimedResponse>(
+                    &query(
+                        deps.as_ref(),
+                        env.clone(),
+                        QueryMsg::IsClaimed {
+                            stage: 1,
+                            address: test_data.account.clone(),
+                        },
+                    )
+                    .unwrap()
+                )
+                .unwrap()
+                .is_claimed
+            );
+
+            // check error on double claim
+            let res = execute(deps.as_mut(), env.clone(), info, msg).unwrap_err();
+            assert_eq!(res, ContractError::Claimed {});
+
+            // query map
+
+            let map = from_binary::<AccountMapResponse>(
+                &query(
+                    deps.as_ref(),
+                    env,
+                    QueryMsg::AccountMap {
+                        stage: 1,
+                        external_address: test_data.account.clone(),
+                    },
+                )
+                .unwrap(),
+            )
+            .unwrap();
+            assert_eq!(map.external_address, test_data.account);
+            assert_eq!(map.host_address, claim_addr);
+        }
     }
 }
