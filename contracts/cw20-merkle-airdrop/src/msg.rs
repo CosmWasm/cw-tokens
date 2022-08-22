@@ -1,9 +1,9 @@
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
-use cosmwasm_std::{Binary, from_slice, Uint128};
-use cw_utils::{Expiration, Scheduled};
 use crate::ContractError;
+use cosmwasm_std::{from_slice, Binary, Uint128};
+use cw_utils::{Expiration, Scheduled};
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 pub struct InstantiateMsg {
