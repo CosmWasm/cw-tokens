@@ -12,10 +12,10 @@ use sha2::Digest;
 use std::convert::TryInto;
 
 use crate::error::ContractError;
-use crate::helpers::{CosmosSignature, SignatureInfo};
+use crate::helpers::{CosmosSignature};
 use crate::msg::{
     AccountMapResponse, ConfigResponse, ExecuteMsg, InstantiateMsg, IsClaimedResponse,
-    LatestStageResponse, MerkleRootResponse, MigrateMsg, QueryMsg, TotalClaimedResponse,
+    LatestStageResponse, MerkleRootResponse, MigrateMsg, QueryMsg, TotalClaimedResponse, SignatureInfo
 };
 use crate::state::{
     Config, CLAIM, CONFIG, HRP, LATEST_STAGE, MERKLE_ROOT, STAGE_ACCOUNT_MAP, STAGE_AMOUNT,
@@ -234,7 +234,7 @@ pub fn execute_claim(
             let hrp = HRP.load(deps.storage, stage)?;
             let proof_addr = cosmos_signature.derive_addr_from_pubkey(hrp.as_str())?;
 
-            if sig.extract_addr_from_memo().unwrap() != info.sender {
+            if sig.extract_addr_from_memo()? != info.sender {
                 return Err(ContractError::VerificationFailed {});
             }
 
@@ -576,7 +576,7 @@ pub fn migrate(deps: DepsMut, _env: Env, _msg: MigrateMsg) -> Result<Response, C
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::helpers::SignatureInfo;
+    use crate::msg::SignatureInfo;
     use cosmwasm_std::testing::{
         mock_dependencies, mock_dependencies_with_balance, mock_env, mock_info,
     };
@@ -1927,7 +1927,7 @@ mod tests {
 
     mod external_sig {
         use super::*;
-        use crate::helpers::SignatureInfo;
+        use crate::msg::SignatureInfo;
 
         const TEST_DATA_EXTERNAL_SIG: &[u8] =
             include_bytes!("../testdata/airdrop_external_sig_test_data.json");

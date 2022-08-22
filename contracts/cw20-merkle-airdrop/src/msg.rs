@@ -1,9 +1,9 @@
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
-use crate::helpers::SignatureInfo;
-use cosmwasm_std::Uint128;
+use cosmwasm_std::{Binary, from_slice, Uint128};
 use cw_utils::{Expiration, Scheduled};
+use crate::ContractError;
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 pub struct InstantiateMsg {
@@ -123,3 +123,21 @@ pub struct AllAccountMapResponse {
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 pub struct MigrateMsg {}
+
+// Signature verification is done on external airdrop claims.
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+pub struct SignatureInfo {
+    pub claim_msg: Binary,
+    pub signature: Binary,
+}
+impl SignatureInfo {
+    pub fn extract_addr_from_memo(&self) -> Result<String, ContractError> {
+        let claim_msg = from_slice::<ClaimMsg>(&self.claim_msg).unwrap();
+        Ok(claim_msg.address)
+    }
+}
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+pub struct ClaimMsg {
+    #[serde(rename = "memo")]
+    address: String,
+}

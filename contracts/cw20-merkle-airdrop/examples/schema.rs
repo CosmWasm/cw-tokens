@@ -2,10 +2,9 @@ use std::env::current_dir;
 use std::fs::create_dir_all;
 
 use cosmwasm_schema::{export_schema, remove_schemas, schema_for};
-use cw20_merkle_airdrop::helpers::SignatureInfo;
 use cw20_merkle_airdrop::msg::{
     AccountMapResponse, ConfigResponse, ExecuteMsg, InstantiateMsg, IsClaimedResponse,
-    LatestStageResponse, MerkleRootResponse, QueryMsg,
+    LatestStageResponse, MerkleRootResponse, QueryMsg, SignatureInfo
 };
 
 fn main() {
