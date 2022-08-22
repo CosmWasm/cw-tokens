@@ -1,14 +1,11 @@
 {
-  "account": "terra1ce2uyed946x9r9dejutepqg0myqaudwlz58uw9",
-  "amount": "100",
-  "root": "dd76c807e985409ebed5ad57c0c9fb52e2612c251536daaaf9c3a85735bd699b",
-  "proofs": [
-    "1281bee43bb2aa2b0f165d61ac00a7e3e327e42d221275891530875a2be40e9e",
-    "d95b41ceaceffd0172e6f7d37b31845ca5aae20d0e82c3d981368a622cf5b8df"
-  ],
-  "signed_msg":{
+  "account": "terra1fez59sv8ur9734ffrpvwpcjadx7n0x6z6xwp7z",
+  "root": "06baae7019d60dbb614ec44afb5c8e375eab0c8c6ddcd81fe2363ff17d2554a9",
+  "hrp": "terra",
+  "amount": "1000000",
+  "proofs": [],
+  "signed_msg": {
     "claim_msg": "eyJhY2NvdW50X251bWJlciI6IjExMjM2IiwiY2hhaW5faWQiOiJwaXNjby0xIiwiZmVlIjp7ImFtb3VudCI6W3siYW1vdW50IjoiMTU4MTIiLCJkZW5vbSI6InVsdW5hIn1dLCJnYXMiOiIxMDU0MDcifSwibWVtbyI6Imp1bm8xMHMydXU5MjY0ZWhscWw1ZnB5cmg5dW5kbmw1bmxhdzYzdGQwaGgiLCJtc2dzIjpbeyJ0eXBlIjoiY29zbW9zLXNkay9Nc2dTZW5kIiwidmFsdWUiOnsiYW1vdW50IjpbeyJhbW91bnQiOiIxIiwiZGVub20iOiJ1bHVuYSJ9XSwiZnJvbV9hZGRyZXNzIjoidGVycmExZmV6NTlzdjh1cjk3MzRmZnJwdndwY2phZHg3bjB4Nno2eHdwN3oiLCJ0b19hZGRyZXNzIjoidGVycmExZmV6NTlzdjh1cjk3MzRmZnJwdndwY2phZHg3bjB4Nno2eHdwN3oifX1dLCJzZXF1ZW5jZSI6IjAifQ==",
-    "signature":"eyJwdWJfa2V5IjoiQTNrUXU1cThkVm9JYUFXS0psdkFtKzdkbG1uRmFMQTl2Tm4wbmZuL25qUjUiLCJzaWduYXR1cmUiOiJEZWRqRTVpM3JpVmxLVi9mbU9PaGx5SDdRR2toUzZWcUV0d01maW9DZldWbGp0RmpXa2c2SmlOTUtwbmh5dUIzSFR3VTltU3paRXZ4VXhINHprcG5WZz09In0="
-  },
-  "hrp": "terra"
+    "signature": "eyJwdWJfa2V5IjoiQWhOZ2UxV01aVXl1ODZ5VGx5ZWpEdVVxUFZTdURONUJhQzArdkw4b3RkSnYiLCJzaWduYXR1cmUiOiJQY1FPczhXSDVPMndXL3Z3ZzZBTElqaW9VNGorMUZYNTZKU1R1MzdIb2lGbThJck5aem5HaGlIRFV1R1VTUmlhVnZRZ2s4Q0tURmNyeVpuYjZLNVhyQT09In0="
+  }
 }
