@@ -573,7 +573,7 @@ pub fn migrate(deps: DepsMut, _env: Env, _msg: MigrateMsg) -> Result<Response, C
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::helpers::{Memo, SignatureInfo};
+    use crate::helpers::{SignatureInfo};
     use cosmwasm_std::testing::{
         mock_dependencies, mock_dependencies_with_balance, mock_env, mock_info,
     };
@@ -1923,9 +1923,6 @@ mod tests {
     }
 
     mod external_sig {
-        use schemars::_private::NoSerialize;
-        use schemars::JsonSchema;
-        use serde_json::json;
         use crate::helpers::{SignatureInfo};
         use super::*;
 
@@ -1946,26 +1943,15 @@ mod tests {
                 .verify(deps.as_ref(), sig.claim_msg.clone())
                 .unwrap();
             assert!(res);
-            println!("{}", sig.extract_addr_from_memo().unwrap());
         }
 
-        /*#[test]
+        #[test]
         fn test_derive_addr_from_pubkey() {
-            let deps = mock_dependencies();
-            let signature_raw = Binary::from_base64("eyJwdWJfa2V5IjoiQTNrUXU1cThkVm9JYUFXS0psdkFtKzdkbG1uRmFMQTl2Tm4wbmZuL25qUjUiLCJzaWduYXR1cmUiOiJEZWRqRTVpM3JpVmxLVi9mbU9PaGx5SDdRR2toUzZWcUV0d01maW9DZldWbGp0RmpXa2c2SmlOTUtwbmh5dUIzSFR3VTltU3paRXZ4VXhINHprcG5WZz09In0=");
-
-            let sig = SignatureInfo {
-                claim_msg: SignedClaimMsg {
-                    addr: "juno1purt0lem029gcsfzpdnxwmnmeuc7xwz8gnt99x".to_string(),
-                },
-                signature: signature_raw.unwrap(),
-            };
-            let cosmos_signature: CosmosSignature = from_binary(&sig.signature).unwrap();
-            let res = cosmos_signature
-                .verify(deps.as_ref(), sig.claim_msg)
-                .unwrap();
-            assert!(res);
-        }*/
+            let test_data: Encoded = from_slice(TEST_DATA_EXTERNAL_SIG).unwrap();
+            let cosmos_signature: CosmosSignature = from_binary(&test_data.signed_msg.unwrap().signature).unwrap();
+            let derived_addr = cosmos_signature.derive_addr_from_pubkey(&test_data.hrp.unwrap()).unwrap();
+            assert_eq!(test_data.account,derived_addr);
+        }
 
         #[test]
         fn claim_with_external_sigs() {

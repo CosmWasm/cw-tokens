@@ -1,12 +1,11 @@
 use crate::ContractError;
 use bech32::ToBase32;
-use cosmwasm_std::{from_binary, Binary, Deps};
+use cosmwasm_std::{Binary, Deps, from_slice};
 use ripemd::{Digest as RipDigest, Ripemd160};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest as ShaDigest, Sha256};
 use std::convert::TryInto;
-use serde_json::json;
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 pub struct CosmosSignature {
@@ -49,9 +48,9 @@ pub struct SignatureInfo {
 }
 impl SignatureInfo {
     pub fn extract_addr_from_memo(&self) -> Result<String, ContractError> {
-        let memo = json!(from_binary::<Memo>(&self.claim_msg).unwrap());
-        let memo_object = memo.as_object().unwrap().get_key_value(&"memo".to_string()).unwrap();
-        Ok (memo_object.1.to_string())
+        let binary = Binary::from_base64(&self.claim_msg.to_string())?;
+        let memo_object = from_slice::<Memo>(&binary).unwrap();
+        Ok (memo_object.memo)
     }
 }
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
