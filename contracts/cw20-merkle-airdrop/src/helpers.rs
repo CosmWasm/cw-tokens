@@ -48,12 +48,12 @@ pub struct SignatureInfo {
 }
 impl SignatureInfo {
     pub fn extract_addr_from_memo(&self) -> Result<String, ContractError> {
-        let binary = Binary::from_base64(&self.claim_msg.to_string())?;
-        let memo_object = from_slice::<Memo>(&binary).unwrap();
-        Ok(memo_object.memo)
+        let claim_msg = from_slice::<ClaimMsg>(&self.claim_msg).unwrap();
+        Ok(claim_msg.address)
     }
 }
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
-pub struct Memo {
-    memo: String,
+pub struct ClaimMsg {
+    #[serde(rename = "memo")]
+    address: String,
 }
