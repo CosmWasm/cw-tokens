@@ -1,12 +1,12 @@
-use crate::msg::SignedClaimMsg;
 use crate::ContractError;
 use bech32::ToBase32;
-use cosmwasm_std::{to_vec, Binary, Deps};
+use cosmwasm_std::{from_binary, Binary, Deps};
 use ripemd::{Digest as RipDigest, Ripemd160};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest as ShaDigest, Sha256};
 use std::convert::TryInto;
+use serde_json::json;
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 pub struct CosmosSignature {
@@ -14,9 +14,8 @@ pub struct CosmosSignature {
     pub signature: Binary,
 }
 impl CosmosSignature {
-    pub fn verify(&self, deps: Deps, claim_msg: &SignedClaimMsg) -> Result<bool, ContractError> {
-        let msg_raw = to_vec(claim_msg)?;
-        let hash = Sha256::digest(&msg_raw);
+    pub fn verify(&self, deps: Deps, claim_msg: Binary) -> Result<bool, ContractError> {
+        let hash = Sha256::digest(&claim_msg);
 
         deps.api
             .secp256k1_verify(
@@ -41,4 +40,21 @@ impl CosmosSignature {
             .map_err(|_| ContractError::VerificationFailed {})?;
         Ok(addr)
     }
+}
+// Signature verification is done on external airdrop claims.
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+pub struct SignatureInfo {
+    pub claim_msg: Binary,
+    pub signature: Binary,
+}
+impl SignatureInfo {
+    pub fn extract_addr_from_memo(&self) -> Result<String, ContractError> {
+        let memo = json!(from_binary::<Memo>(&self.claim_msg).unwrap());
+        let memo_object = memo.as_object().unwrap().get_key_value(&"memo".to_string()).unwrap();
+        Ok (memo_object.1.to_string())
+    }
+}
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+pub struct Memo {
+    memo: String
 }

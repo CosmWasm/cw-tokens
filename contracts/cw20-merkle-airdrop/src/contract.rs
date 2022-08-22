@@ -12,12 +12,8 @@ use sha2::Digest;
 use std::convert::TryInto;
 
 use crate::error::ContractError;
-use crate::helpers::CosmosSignature;
-use crate::msg::{
-    AccountMapResponse, ConfigResponse, ExecuteMsg, InstantiateMsg, IsClaimedResponse,
-    LatestStageResponse, MerkleRootResponse, MigrateMsg, QueryMsg, SignatureInfo,
-    TotalClaimedResponse,
-};
+use crate::helpers::{CosmosSignature, SignatureInfo};
+use crate::msg::{AccountMapResponse, ConfigResponse, ExecuteMsg, InstantiateMsg, IsClaimedResponse, LatestStageResponse, MerkleRootResponse, MigrateMsg, QueryMsg, TotalClaimedResponse};
 use crate::state::{
     Config, CLAIM, CONFIG, HRP, LATEST_STAGE, MERKLE_ROOT, STAGE_ACCOUNT_MAP, STAGE_AMOUNT,
     STAGE_AMOUNT_CLAIMED, STAGE_EXPIRATION, STAGE_START,
@@ -230,14 +226,12 @@ pub fn execute_claim(
         Some(sig) => {
             // verify signature
             let cosmos_signature: CosmosSignature = from_binary(&sig.signature)?;
-            cosmos_signature.verify(deps.as_ref(), &sig.claim_msg)?;
-
+            cosmos_signature.verify(deps.as_ref(), sig.claim_msg.clone())?;
             // get airdrop stage bech32 prefix and derive proof address from public key
             let hrp = HRP.load(deps.storage, stage)?;
             let proof_addr = cosmos_signature.derive_addr_from_pubkey(hrp.as_str())?;
 
-            // verify claimer address is sender
-            if sig.claim_msg.addr != info.sender {
+            if sig.extract_addr_from_memo().unwrap() != info.sender {
                 return Err(ContractError::VerificationFailed {});
             }
 
@@ -579,7 +573,7 @@ pub fn migrate(deps: DepsMut, _env: Env, _msg: MigrateMsg) -> Result<Response, C
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::msg::SignedClaimMsg;
+    use crate::helpers::{Memo, SignatureInfo};
     use cosmwasm_std::testing::{
         mock_dependencies, mock_dependencies_with_balance, mock_env, mock_info,
     };
@@ -1929,6 +1923,10 @@ mod tests {
     }
 
     mod external_sig {
+        use schemars::_private::NoSerialize;
+        use schemars::JsonSchema;
+        use serde_json::json;
+        use crate::helpers::{SignatureInfo};
         use super::*;
 
         const TEST_DATA_EXTERNAL_SIG: &[u8] =
@@ -1937,22 +1935,21 @@ mod tests {
         #[test]
         fn test_cosmos_sig_verify() {
             let deps = mock_dependencies();
-            let signature_raw = Binary::from_base64("eyJwdWJfa2V5IjoiQTNrUXU1cThkVm9JYUFXS0psdkFtKzdkbG1uRmFMQTl2Tm4wbmZuL25qUjUiLCJzaWduYXR1cmUiOiJEZWRqRTVpM3JpVmxLVi9mbU9PaGx5SDdRR2toUzZWcUV0d01maW9DZldWbGp0RmpXa2c2SmlOTUtwbmh5dUIzSFR3VTltU3paRXZ4VXhINHprcG5WZz09In0=");
+            let signature_raw = Binary::from_base64("eyJwdWJfa2V5IjoiQWhOZ2UxV01aVXl1ODZ5VGx5ZWpEdVVxUFZTdURONUJhQzArdkw4b3RkSnYiLCJzaWduYXR1cmUiOiJQY1FPczhXSDVPMndXL3Z3ZzZBTElqaW9VNGorMUZYNTZKU1R1MzdIb2lGbThJck5aem5HaGlIRFV1R1VTUmlhVnZRZ2s4Q0tURmNyeVpuYjZLNVhyQT09In0=");
 
             let sig = SignatureInfo {
-                claim_msg: SignedClaimMsg {
-                    addr: "juno1purt0lem029gcsfzpdnxwmnmeuc7xwz8gnt99x".to_string(),
-                },
+                claim_msg: Binary::from_base64("eyJhY2NvdW50X251bWJlciI6IjExMjM2IiwiY2hhaW5faWQiOiJwaXNjby0xIiwiZmVlIjp7ImFtb3VudCI6W3siYW1vdW50IjoiMTU4MTIiLCJkZW5vbSI6InVsdW5hIn1dLCJnYXMiOiIxMDU0MDcifSwibWVtbyI6Imp1bm8xMHMydXU5MjY0ZWhscWw1ZnB5cmg5dW5kbmw1bmxhdzYzdGQwaGgiLCJtc2dzIjpbeyJ0eXBlIjoiY29zbW9zLXNkay9Nc2dTZW5kIiwidmFsdWUiOnsiYW1vdW50IjpbeyJhbW91bnQiOiIxIiwiZGVub20iOiJ1bHVuYSJ9XSwiZnJvbV9hZGRyZXNzIjoidGVycmExZmV6NTlzdjh1cjk3MzRmZnJwdndwY2phZHg3bjB4Nno2eHdwN3oiLCJ0b19hZGRyZXNzIjoidGVycmExZmV6NTlzdjh1cjk3MzRmZnJwdndwY2phZHg3bjB4Nno2eHdwN3oifX1dLCJzZXF1ZW5jZSI6IjAifQ==").unwrap(),
                 signature: signature_raw.unwrap(),
             };
             let cosmos_signature: CosmosSignature = from_binary(&sig.signature).unwrap();
             let res = cosmos_signature
-                .verify(deps.as_ref(), &sig.claim_msg)
+                .verify(deps.as_ref(), sig.claim_msg.clone())
                 .unwrap();
             assert!(res);
+            println!("{}", sig.extract_addr_from_memo().unwrap());
         }
 
-        #[test]
+        /*#[test]
         fn test_derive_addr_from_pubkey() {
             let deps = mock_dependencies();
             let signature_raw = Binary::from_base64("eyJwdWJfa2V5IjoiQTNrUXU1cThkVm9JYUFXS0psdkFtKzdkbG1uRmFMQTl2Tm4wbmZuL25qUjUiLCJzaWduYXR1cmUiOiJEZWRqRTVpM3JpVmxLVi9mbU9PaGx5SDdRR2toUzZWcUV0d01maW9DZldWbGp0RmpXa2c2SmlOTUtwbmh5dUIzSFR3VTltU3paRXZ4VXhINHprcG5WZz09In0=");
@@ -1965,10 +1962,10 @@ mod tests {
             };
             let cosmos_signature: CosmosSignature = from_binary(&sig.signature).unwrap();
             let res = cosmos_signature
-                .verify(deps.as_ref(), &sig.claim_msg)
+                .verify(deps.as_ref(), sig.claim_msg)
                 .unwrap();
             assert!(res);
-        }
+        }*/
 
         #[test]
         fn claim_with_external_sigs() {
@@ -1977,7 +1974,7 @@ mod tests {
                 amount: Uint128::new(1234567),
             }]);
             let test_data: Encoded = from_slice(TEST_DATA_EXTERNAL_SIG).unwrap();
-            let claim_addr = test_data.signed_msg.clone().unwrap().claim_msg.addr;
+            let claim_addr = test_data.signed_msg.clone().unwrap().extract_addr_from_memo().unwrap();
 
             let msg = InstantiateMsg {
                 owner: Some("owner0000".to_string()),
