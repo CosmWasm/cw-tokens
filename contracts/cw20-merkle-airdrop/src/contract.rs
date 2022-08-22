@@ -13,7 +13,10 @@ use std::convert::TryInto;
 
 use crate::error::ContractError;
 use crate::helpers::{CosmosSignature, SignatureInfo};
-use crate::msg::{AccountMapResponse, ConfigResponse, ExecuteMsg, InstantiateMsg, IsClaimedResponse, LatestStageResponse, MerkleRootResponse, MigrateMsg, QueryMsg, TotalClaimedResponse};
+use crate::msg::{
+    AccountMapResponse, ConfigResponse, ExecuteMsg, InstantiateMsg, IsClaimedResponse,
+    LatestStageResponse, MerkleRootResponse, MigrateMsg, QueryMsg, TotalClaimedResponse,
+};
 use crate::state::{
     Config, CLAIM, CONFIG, HRP, LATEST_STAGE, MERKLE_ROOT, STAGE_ACCOUNT_MAP, STAGE_AMOUNT,
     STAGE_AMOUNT_CLAIMED, STAGE_EXPIRATION, STAGE_START,
@@ -573,7 +576,7 @@ pub fn migrate(deps: DepsMut, _env: Env, _msg: MigrateMsg) -> Result<Response, C
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::helpers::{SignatureInfo};
+    use crate::helpers::SignatureInfo;
     use cosmwasm_std::testing::{
         mock_dependencies, mock_dependencies_with_balance, mock_env, mock_info,
     };
@@ -1923,8 +1926,8 @@ mod tests {
     }
 
     mod external_sig {
-        use crate::helpers::{SignatureInfo};
         use super::*;
+        use crate::helpers::SignatureInfo;
 
         const TEST_DATA_EXTERNAL_SIG: &[u8] =
             include_bytes!("../testdata/airdrop_external_sig_test_data.json");
@@ -1940,7 +1943,7 @@ mod tests {
             };
             let cosmos_signature: CosmosSignature = from_binary(&sig.signature).unwrap();
             let res = cosmos_signature
-                .verify(deps.as_ref(), sig.claim_msg.clone())
+                .verify(deps.as_ref(), sig.claim_msg)
                 .unwrap();
             assert!(res);
         }
@@ -1948,9 +1951,12 @@ mod tests {
         #[test]
         fn test_derive_addr_from_pubkey() {
             let test_data: Encoded = from_slice(TEST_DATA_EXTERNAL_SIG).unwrap();
-            let cosmos_signature: CosmosSignature = from_binary(&test_data.signed_msg.unwrap().signature).unwrap();
-            let derived_addr = cosmos_signature.derive_addr_from_pubkey(&test_data.hrp.unwrap()).unwrap();
-            assert_eq!(test_data.account,derived_addr);
+            let cosmos_signature: CosmosSignature =
+                from_binary(&test_data.signed_msg.unwrap().signature).unwrap();
+            let derived_addr = cosmos_signature
+                .derive_addr_from_pubkey(&test_data.hrp.unwrap())
+                .unwrap();
+            assert_eq!(test_data.account, derived_addr);
         }
 
         #[test]
@@ -1960,7 +1966,12 @@ mod tests {
                 amount: Uint128::new(1234567),
             }]);
             let test_data: Encoded = from_slice(TEST_DATA_EXTERNAL_SIG).unwrap();
-            let claim_addr = test_data.signed_msg.clone().unwrap().extract_addr_from_memo().unwrap();
+            let claim_addr = test_data
+                .signed_msg
+                .clone()
+                .unwrap()
+                .extract_addr_from_memo()
+                .unwrap();
 
             let msg = InstantiateMsg {
                 owner: Some("owner0000".to_string()),

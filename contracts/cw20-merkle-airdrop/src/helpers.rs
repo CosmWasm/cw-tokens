@@ -1,6 +1,6 @@
 use crate::ContractError;
 use bech32::ToBase32;
-use cosmwasm_std::{Binary, Deps, from_slice};
+use cosmwasm_std::{from_slice, Binary, Deps};
 use ripemd::{Digest as RipDigest, Ripemd160};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -50,10 +50,10 @@ impl SignatureInfo {
     pub fn extract_addr_from_memo(&self) -> Result<String, ContractError> {
         let binary = Binary::from_base64(&self.claim_msg.to_string())?;
         let memo_object = from_slice::<Memo>(&binary).unwrap();
-        Ok (memo_object.memo)
+        Ok(memo_object.memo)
     }
 }
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 pub struct Memo {
-    memo: String
+    memo: String,
 }
