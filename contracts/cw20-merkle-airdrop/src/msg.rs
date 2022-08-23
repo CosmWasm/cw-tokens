@@ -131,13 +131,14 @@ pub struct SignatureInfo {
     pub signature: Binary,
 }
 impl SignatureInfo {
-    pub fn extract_addr_from_memo(&self) -> Result<String, ContractError> {
-        let claim_msg = from_slice::<ClaimMsg>(&self.claim_msg).unwrap();
+    pub fn extract_addr(&self) -> Result<String, ContractError> {
+        let claim_msg = from_slice::<ClaimMsg>(&self.claim_msg)?;
         Ok(claim_msg.address)
     }
 }
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 pub struct ClaimMsg {
+    // To provide claiming via ledger, the address is passed in the memo field of a cosmos msg.
     #[serde(rename = "memo")]
     address: String,
 }

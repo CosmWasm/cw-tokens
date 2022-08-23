@@ -235,7 +235,7 @@ pub fn execute_claim(
             let hrp = HRP.load(deps.storage, stage)?;
             let proof_addr = cosmos_signature.derive_addr_from_pubkey(hrp.as_str())?;
 
-            if sig.extract_addr_from_memo()? != info.sender {
+            if sig.extract_addr()? != info.sender {
                 return Err(ContractError::VerificationFailed {});
             }
 
@@ -1971,7 +1971,7 @@ mod tests {
                 .signed_msg
                 .clone()
                 .unwrap()
-                .extract_addr_from_memo()
+                .extract_addr()
                 .unwrap();
 
             let msg = InstantiateMsg {
