@@ -13,8 +13,8 @@ pub struct CosmosSignature {
     pub signature: Binary,
 }
 impl CosmosSignature {
-    pub fn verify(&self, deps: Deps, claim_msg: Binary) -> Result<bool, ContractError> {
-        let hash = Sha256::digest(&claim_msg);
+    pub fn verify(&self, deps: Deps, claim_msg: &Binary) -> Result<bool, ContractError> {
+        let hash = Sha256::digest(claim_msg);
 
         deps.api
             .secp256k1_verify(
