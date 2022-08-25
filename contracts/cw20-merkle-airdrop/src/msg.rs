@@ -1,7 +1,8 @@
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
-use cosmwasm_std::{Binary, Uint128};
+use crate::ContractError;
+use cosmwasm_std::{from_slice, Binary, Uint128};
 use cw_utils::{Expiration, Scheduled};
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
@@ -126,11 +127,18 @@ pub struct MigrateMsg {}
 // Signature verification is done on external airdrop claims.
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 pub struct SignatureInfo {
-    pub claim_msg: SignedClaimMsg,
+    pub claim_msg: Binary,
     pub signature: Binary,
 }
-
+impl SignatureInfo {
+    pub fn extract_addr(&self) -> Result<String, ContractError> {
+        let claim_msg = from_slice::<ClaimMsg>(&self.claim_msg)?;
+        Ok(claim_msg.address)
+    }
+}
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
-pub struct SignedClaimMsg {
-    pub addr: String,
+pub struct ClaimMsg {
+    // To provide claiming via ledger, the address is passed in the memo field of a cosmos msg.
+    #[serde(rename = "memo")]
+    address: String,
 }

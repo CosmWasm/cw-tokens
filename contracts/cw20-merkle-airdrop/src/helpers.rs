@@ -1,7 +1,6 @@
-use crate::msg::SignedClaimMsg;
 use crate::ContractError;
 use bech32::ToBase32;
-use cosmwasm_std::{to_vec, Binary, Deps};
+use cosmwasm_std::{Binary, Deps};
 use ripemd::{Digest as RipDigest, Ripemd160};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -14,9 +13,8 @@ pub struct CosmosSignature {
     pub signature: Binary,
 }
 impl CosmosSignature {
-    pub fn verify(&self, deps: Deps, claim_msg: &SignedClaimMsg) -> Result<bool, ContractError> {
-        let msg_raw = to_vec(claim_msg)?;
-        let hash = Sha256::digest(&msg_raw);
+    pub fn verify(&self, deps: Deps, claim_msg: &Binary) -> Result<bool, ContractError> {
+        let hash = Sha256::digest(claim_msg);
 
         deps.api
             .secp256k1_verify(

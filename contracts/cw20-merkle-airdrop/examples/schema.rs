@@ -4,7 +4,7 @@ use std::fs::create_dir_all;
 use cosmwasm_schema::{export_schema, remove_schemas, schema_for};
 use cw20_merkle_airdrop::msg::{
     AccountMapResponse, ConfigResponse, ExecuteMsg, InstantiateMsg, IsClaimedResponse,
-    LatestStageResponse, MerkleRootResponse, QueryMsg, SignatureInfo, SignedClaimMsg,
+    LatestStageResponse, MerkleRootResponse, QueryMsg, SignatureInfo,
 };
 
 fn main() {
@@ -22,5 +22,4 @@ fn main() {
     export_schema(&schema_for!(ConfigResponse), &out_dir);
     export_schema(&schema_for!(AccountMapResponse), &out_dir);
     export_schema(&schema_for!(SignatureInfo), &out_dir);
-    export_schema(&schema_for!(SignedClaimMsg), &out_dir);
 }
