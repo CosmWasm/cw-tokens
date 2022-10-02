@@ -363,8 +363,6 @@ dependencies = [
  "integer-cbrt",
  "integer-sqrt",
  "rust_decimal",
- "schemars",
- "serde",
  "thiserror",
 ]
 

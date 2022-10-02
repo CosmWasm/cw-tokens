@@ -143,7 +143,7 @@ pub fn execute_buy(
     let payment = must_pay(&info, &state.reserve_denom)?;
 
     // calculate how many tokens can be purchased with this and mint them
-    let curve = curve_fn(state.decimals);
+    let curve = curve_fn(state.clone().decimals);
     state.reserve += payment;
     let new_supply = curve.supply(state.reserve);
     let minted = new_supply
@@ -236,7 +236,7 @@ fn do_sell(
 
     // calculate how many tokens can be purchased with this and mint them
     let mut state = CURVE_STATE.load(deps.storage)?;
-    let curve = curve_fn(state.decimals);
+    let curve = curve_fn(state.clone().decimals);
     state.supply = state
         .supply
         .checked_sub(amount)

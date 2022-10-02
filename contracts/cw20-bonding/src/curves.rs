@@ -2,8 +2,7 @@ use integer_cbrt::IntegerCubeRoot;
 use integer_sqrt::IntegerSquareRoot;
 use rust_decimal::prelude::ToPrimitive;
 use rust_decimal::Decimal;
-use schemars::JsonSchema;
-use serde::{Deserialize, Serialize};
+use cosmwasm_schema::{cw_serde};
 use std::str::FromStr;
 
 use cosmwasm_std::{Decimal as StdDecimal, Uint128};
@@ -85,13 +84,13 @@ impl Curve for Constant {
     fn reserve(&self, supply: Uint128) -> Uint128 {
         // f(x) = supply * self.value
         let reserve = self.normalize.from_supply(supply) * self.value;
-        self.normalize.to_reserve(reserve)
+        self.normalize.clone().to_reserve(reserve)
     }
 
     fn supply(&self, reserve: Uint128) -> Uint128 {
         // f(x) = reserve / self.value
         let supply = self.normalize.from_reserve(reserve) / self.value;
-        self.normalize.to_supply(supply)
+        self.normalize.clone().to_supply(supply)
     }
 }
 
@@ -120,7 +119,7 @@ impl Curve for Linear {
         let square = normalized * normalized;
         // Note: multiplying by 0.5 is much faster than dividing by 2
         let reserve = square * self.slope * Decimal::new(5, 1);
-        self.normalize.to_reserve(reserve)
+        self.normalize.clone().to_reserve(reserve)
     }
 
     fn supply(&self, reserve: Uint128) -> Uint128 {
@@ -128,7 +127,7 @@ impl Curve for Linear {
         // note: use addition here to optimize 2* operation
         let square = self.normalize.from_reserve(reserve + reserve) / self.slope;
         let supply = square_root(square);
-        self.normalize.to_supply(supply)
+        self.normalize.clone().to_supply(supply)
     }
 }
 
@@ -157,7 +156,7 @@ impl Curve for SquareRoot {
         let normalized = self.normalize.from_supply(supply);
         let root = square_root(normalized);
         let reserve = self.slope * normalized * root / Decimal::new(15, 1);
-        self.normalize.to_reserve(reserve)
+        self.normalize.clone().to_reserve(reserve)
     }
 
     fn supply(&self, reserve: Uint128) -> Uint128 {
@@ -165,7 +164,7 @@ impl Curve for SquareRoot {
         let base = self.normalize.from_reserve(reserve) * Decimal::new(15, 1) / self.slope;
         let squared = base * base;
         let supply = cube_root(squared);
-        self.normalize.to_supply(supply)
+        self.normalize.clone().to_supply(supply)
     }
 }
 
@@ -202,7 +201,7 @@ fn cube_root(cube: Decimal) -> Decimal {
 }
 
 /// DecimalPlaces should be passed into curve constructors
-#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, JsonSchema, Default)]
+#[cw_serde]
 pub struct DecimalPlaces {
     /// Number of decimal places for the supply token (this is what was passed in cw20-base instantiate
     pub supply: u32,

@@ -1,5 +1,4 @@
-use schemars::JsonSchema;
-use serde::{Deserialize, Serialize};
+use cosmwasm_schema::{cw_serde};
 
 use cosmwasm_std::Uint128;
 use cw_storage_plus::Item;
@@ -8,7 +7,7 @@ use crate::curves::DecimalPlaces;
 use crate::msg::CurveType;
 
 /// Supply is dynamic and tracks the current supply of staked and ERC20 tokens.
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema, Default)]
+#[cw_serde]
 pub struct CurveState {
     /// reserve is how many native tokens exist bonded to the validator
     pub reserve: Uint128,

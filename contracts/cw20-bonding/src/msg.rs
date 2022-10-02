@@ -1,11 +1,14 @@
-use schemars::JsonSchema;
-use serde::{Deserialize, Serialize};
+use cosmwasm_schema::{cw_serde, QueryResponses};
 
 use crate::curves::{decimal, Constant, Curve, DecimalPlaces, Linear, SquareRoot};
 use cosmwasm_std::{Binary, Decimal, Uint128};
 use cw20::Expiration;
+use cw20::TokenInfoResponse as Cw20TokenInfoResponse;
+use cw20::BalanceResponse as Cw20BalanceResponse;
+use cw20::AllowanceResponse as Cw20AllowanceResponse;
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+
+#[cw_serde]
 pub struct InstantiateMsg {
     /// name of the supply token
     pub name: String,
@@ -30,8 +33,7 @@ pub struct InstantiateMsg {
 
 pub type CurveFn = Box<dyn Fn(DecimalPlaces) -> Box<dyn Curve>>;
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
-#[serde(rename_all = "snake_case")]
+#[cw_serde]
 pub enum CurveType {
     /// Constant always returns `value * 10^-scale` as spot price
     Constant { value: Uint128, scale: u32 },
@@ -66,8 +68,7 @@ impl CurveType {
     }
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
-#[serde(rename_all = "snake_case")]
+#[cw_serde]
 pub enum ExecuteMsg {
     /// Buy will attempt to purchase as many supply tokens as possible.
     /// You must send only reserve tokens in that message
@@ -119,22 +120,25 @@ pub enum ExecuteMsg {
     BurnFrom { owner: String, amount: Uint128 },
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
-#[serde(rename_all = "snake_case")]
+#[cw_serde]
+#[derive(QueryResponses)]
 pub enum QueryMsg {
     /// Returns the reserve and supply quantities, as well as the spot price to buy 1 token
+    #[returns(CurveInfoResponse)]
     CurveInfo {},
-
     /// Implements CW20. Returns the current balance of the given address, 0 if unset.
+    #[returns(Cw20BalanceResponse)]
     Balance { address: String },
     /// Implements CW20. Returns metadata on the contract - name, decimals, supply, etc.
+    #[returns(Cw20TokenInfoResponse)]
     TokenInfo {},
     /// Implements CW20 "allowance" extension.
     /// Returns how much spender can use from owner account, 0 if unset.
+    #[returns(Cw20AllowanceResponse)]
     Allowance { owner: String, spender: String },
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+#[cw_serde]
 pub struct CurveInfoResponse {
     // how many reserve tokens have been received
     pub reserve: Uint128,
