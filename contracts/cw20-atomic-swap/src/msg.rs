@@ -1,14 +1,12 @@
-use schemars::JsonSchema;
-use serde::{Deserialize, Serialize};
+use cosmwasm_schema::{cw_serde, QueryResponses};
 
 use cosmwasm_std::Coin;
 use cw20::{Cw20Coin, Cw20ReceiveMsg, Expiration};
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+#[cw_serde]
 pub struct InstantiateMsg {}
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
-#[serde(rename_all = "snake_case")]
+#[cw_serde]
 pub enum ExecuteMsg {
     Create(CreateMsg),
     /// Release sends all tokens to the recipient.
@@ -26,13 +24,12 @@ pub enum ExecuteMsg {
     Receive(Cw20ReceiveMsg),
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
-#[serde(rename_all = "snake_case")]
+#[cw_serde]
 pub enum ReceiveMsg {
     Create(CreateMsg),
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+#[cw_serde]
 pub struct CreateMsg {
     /// id is a human-readable name for the swap to use later.
     /// 3-20 bytes of utf-8 text
@@ -54,26 +51,28 @@ pub fn is_valid_name(name: &str) -> bool {
     true
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
-#[serde(rename_all = "snake_case")]
+#[cw_serde]
+#[derive(QueryResponses)]
 pub enum QueryMsg {
     /// Show all open swaps. Return type is ListResponse.
+    #[returns(ListResponse)]
     List {
         start_after: Option<String>,
         limit: Option<u32>,
     },
     /// Returns the details of the named swap, error if not created.
     /// Return type: DetailsResponse.
+    #[returns(DetailsResponse)]
     Details { id: String },
 }
 
-#[derive(Serialize, Deserialize, Clone, PartialEq, JsonSchema, Debug)]
+#[cw_serde]
 pub struct ListResponse {
     /// List all open swap ids
     pub swaps: Vec<String>,
 }
 
-#[derive(Serialize, Deserialize, Clone, PartialEq, JsonSchema, Debug)]
+#[cw_serde]
 pub struct DetailsResponse {
     /// Id of this swap
     pub id: String,
@@ -89,7 +88,7 @@ pub struct DetailsResponse {
     pub balance: BalanceHuman,
 }
 
-#[derive(Serialize, Deserialize, Clone, PartialEq, JsonSchema, Debug)]
+#[cw_serde]
 pub enum BalanceHuman {
     Native(Vec<Coin>),
     Cw20(Cw20Coin),
