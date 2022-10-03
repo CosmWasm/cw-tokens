@@ -1,15 +1,13 @@
-use schemars::JsonSchema;
-use serde::{Deserialize, Serialize};
+use cosmwasm_schema::{cw_serde, QueryResponses};
 
 use cosmwasm_std::{Addr, Api, Coin, StdResult};
 
 use cw20::{Cw20Coin, Cw20ReceiveMsg};
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+#[cw_serde]
 pub struct InstantiateMsg {}
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
-#[serde(rename_all = "snake_case")]
+#[cw_serde]
 pub enum ExecuteMsg {
     Create(CreateMsg),
     /// Adds all sent native tokens to the contract
@@ -37,8 +35,7 @@ pub enum ExecuteMsg {
     Receive(Cw20ReceiveMsg),
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
-#[serde(rename_all = "snake_case")]
+#[cw_serde]
 pub enum ReceiveMsg {
     Create(CreateMsg),
     /// Adds all sent native tokens to the contract
@@ -47,7 +44,7 @@ pub enum ReceiveMsg {
     },
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+#[cw_serde]
 pub struct CreateMsg {
     /// id is a human-readable name for the escrow to use later
     /// 3-20 bytes of utf-8 text
@@ -90,23 +87,25 @@ pub fn is_valid_name(name: &str) -> bool {
     true
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
-#[serde(rename_all = "snake_case")]
+#[cw_serde]
+#[derive(QueryResponses)]
 pub enum QueryMsg {
     /// Show all open escrows. Return type is ListResponse.
+    #[returns(ListResponse)]
     List {},
     /// Returns the details of the named escrow, error if not created
     /// Return type: DetailsResponse.
+    #[returns(DetailsResponse)]
     Details { id: String },
 }
 
-#[derive(Serialize, Deserialize, Clone, PartialEq, JsonSchema, Debug)]
+#[cw_serde]
 pub struct ListResponse {
     /// list all registered ids
     pub escrows: Vec<String>,
 }
 
-#[derive(Serialize, Deserialize, Clone, PartialEq, JsonSchema, Debug)]
+#[cw_serde]
 pub struct DetailsResponse {
     /// id of this escrow
     pub id: String,
