@@ -1,7 +1,7 @@
-use cosmwasm_schema::{cw_serde};
-use serde::{Deserialize, Serialize};
+use cosmwasm_schema::cw_serde;
 use cosmwasm_std::{Addr, DepsMut, StdResult, Uint128};
 use cw_storage_plus::{Item, Map};
+use serde::{Deserialize, Serialize};
 
 #[cw_serde]
 pub struct Config {
