@@ -578,11 +578,11 @@ pub fn migrate(deps: DepsMut, _env: Env, _msg: MigrateMsg) -> Result<Response, C
 mod tests {
     use super::*;
     use crate::msg::SignatureInfo;
+    use cosmwasm_schema::cw_serde;
     use cosmwasm_std::testing::{
         mock_dependencies, mock_dependencies_with_balance, mock_env, mock_info,
     };
     use cosmwasm_std::{from_binary, from_slice, CosmosMsg, SubMsg, WasmMsg};
-    use cosmwasm_schema::{cw_serde};
     use serde::{Deserialize, Serialize};
 
     #[test]

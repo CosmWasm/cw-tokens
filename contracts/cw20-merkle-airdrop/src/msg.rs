@@ -1,5 +1,5 @@
-use cosmwasm_schema::{cw_serde, QueryResponses};
 use crate::ContractError;
+use cosmwasm_schema::{cw_serde, QueryResponses};
 use cosmwasm_std::{from_slice, Binary, Uint128};
 use cw_utils::{Expiration, Scheduled};
 use serde::{Deserialize, Serialize};
@@ -54,26 +54,16 @@ pub enum QueryMsg {
     #[returns(ConfigResponse)]
     Config {},
     #[returns(MerkleRootResponse)]
-    MerkleRoot {
-        stage: u8,
-    },
+    MerkleRoot { stage: u8 },
     #[returns(LatestStageResponse)]
     LatestStage {},
     #[returns(IsClaimedResponse)]
-    IsClaimed {
-        stage: u8,
-        address: String,
-    },
+    IsClaimed { stage: u8, address: String },
     #[returns(TotalClaimedResponse)]
-    TotalClaimed {
-        stage: u8,
-    },
+    TotalClaimed { stage: u8 },
     // for cross chain airdrops, maps target account to host account
     #[returns(AccountMapResponse)]
-    AccountMap {
-        stage: u8,
-        external_address: String,
-    },
+    AccountMap { stage: u8, external_address: String },
     #[returns(AllAccountMapResponse)]
     AllAccountMaps {
         stage: u8,

@@ -1,4 +1,4 @@
-use cosmwasm_schema::{cw_serde};
+use cosmwasm_schema::cw_serde;
 
 use cosmwasm_std::{Addr, Coin, Env, Order, StdResult, Storage, Timestamp};
 use cw_storage_plus::Map;

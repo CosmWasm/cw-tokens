@@ -1,8 +1,8 @@
+use cosmwasm_schema::cw_serde;
 use integer_cbrt::IntegerCubeRoot;
 use integer_sqrt::IntegerSquareRoot;
 use rust_decimal::prelude::ToPrimitive;
 use rust_decimal::Decimal;
-use cosmwasm_schema::{cw_serde};
 use std::str::FromStr;
 
 use cosmwasm_std::{Decimal as StdDecimal, Uint128};

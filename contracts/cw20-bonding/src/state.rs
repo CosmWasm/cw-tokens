@@ -1,4 +1,4 @@
-use cosmwasm_schema::{cw_serde};
+use cosmwasm_schema::cw_serde;
 
 use cosmwasm_std::Uint128;
 use cw_storage_plus::Item;

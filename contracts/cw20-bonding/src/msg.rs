@@ -2,11 +2,10 @@ use cosmwasm_schema::{cw_serde, QueryResponses};
 
 use crate::curves::{decimal, Constant, Curve, DecimalPlaces, Linear, SquareRoot};
 use cosmwasm_std::{Binary, Decimal, Uint128};
+use cw20::AllowanceResponse as Cw20AllowanceResponse;
+use cw20::BalanceResponse as Cw20BalanceResponse;
 use cw20::Expiration;
 use cw20::TokenInfoResponse as Cw20TokenInfoResponse;
-use cw20::BalanceResponse as Cw20BalanceResponse;
-use cw20::AllowanceResponse as Cw20AllowanceResponse;
-
 
 #[cw_serde]
 pub struct InstantiateMsg {

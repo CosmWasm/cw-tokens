@@ -1,4 +1,4 @@
-use cosmwasm_schema::{cw_serde};
+use cosmwasm_schema::cw_serde;
 
 use cosmwasm_std::{Addr, Binary, BlockInfo, Order, StdResult, Storage};
 use cw_storage_plus::{Bound, Map};

@@ -1,8 +1,8 @@
 use crate::ContractError;
 use bech32::ToBase32;
+use cosmwasm_schema::cw_serde;
 use cosmwasm_std::{Binary, Deps};
 use ripemd::{Digest as RipDigest, Ripemd160};
-use cosmwasm_schema::{cw_serde};
 use sha2::{Digest as ShaDigest, Sha256};
 use std::convert::TryInto;
 
