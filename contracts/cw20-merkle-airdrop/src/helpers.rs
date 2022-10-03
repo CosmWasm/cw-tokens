@@ -2,12 +2,11 @@ use crate::ContractError;
 use bech32::ToBase32;
 use cosmwasm_std::{Binary, Deps};
 use ripemd::{Digest as RipDigest, Ripemd160};
-use schemars::JsonSchema;
-use serde::{Deserialize, Serialize};
+use cosmwasm_schema::{cw_serde};
 use sha2::{Digest as ShaDigest, Sha256};
 use std::convert::TryInto;
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+#[cw_serde]
 pub struct CosmosSignature {
     pub pub_key: Binary,
     pub signature: Binary,
