@@ -1,12 +1,12 @@
-use schemars::JsonSchema;
-use serde::{Deserialize, Serialize};
+use cosmwasm_schema::{cw_serde, QueryResponses};
 
 use cosmwasm_std::{Binary, Coin, Decimal, Uint128};
 use cw20::Expiration;
 pub use cw_controllers::ClaimsResponse;
 use cw_utils::Duration;
+use cw20::{AllowanceResponse, BalanceResponse, TokenInfoResponse};
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+#[cw_serde]
 pub struct InstantiateMsg {
     /// name of the derivative token
     pub name: String,
@@ -28,8 +28,7 @@ pub struct InstantiateMsg {
     pub min_withdrawal: Uint128,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
-#[serde(rename_all = "snake_case")]
+#[cw_serde]
 pub enum ExecuteMsg {
     /// Bond will bond all staking tokens sent with the message and release derivative tokens
     Bond {},
@@ -94,24 +93,29 @@ pub enum ExecuteMsg {
     BurnFrom { owner: String, amount: Uint128 },
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
-#[serde(rename_all = "snake_case")]
+#[cw_serde]
+#[derive(QueryResponses)]
 pub enum QueryMsg {
     /// Claims shows the number of tokens this address can access when they are done unbonding
+    #[returns(ClaimsResponse)]
     Claims { address: String },
     /// Investment shows metadata on the staking info of the contract
+    #[returns(InvestmentResponse)]
     Investment {},
 
     /// Implements CW20. Returns the current balance of the given address, 0 if unset.
+    #[returns(BalanceResponse)]
     Balance { address: String },
     /// Implements CW20. Returns metadata on the contract - name, decimals, supply, etc.
+    #[returns(TokenInfoResponse)]
     TokenInfo {},
     /// Implements CW20 "allowance" extension.
     /// Returns how much spender can use from owner account, 0 if unset.
+    #[returns(AllowanceResponse)]
     Allowance { owner: String, spender: String },
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+#[cw_serde]
 pub struct InvestmentResponse {
     pub token_supply: Uint128,
     pub staked_tokens: Coin,

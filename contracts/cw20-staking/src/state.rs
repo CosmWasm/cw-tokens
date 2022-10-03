@@ -1,6 +1,4 @@
-use schemars::JsonSchema;
-use serde::{Deserialize, Serialize};
-
+use cosmwasm_schema::{cw_serde};
 use cosmwasm_std::{Addr, Decimal, Uint128};
 use cw_controllers::Claims;
 use cw_storage_plus::Item;
@@ -9,7 +7,7 @@ use cw_utils::Duration;
 pub const CLAIMS: Claims = Claims::new("claims");
 
 /// Investment info is fixed at instantiation, and is used to control the function of the contract
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+#[cw_serde]
 pub struct InvestmentInfo {
     /// Owner created the contract and takes a cut
     pub owner: Addr,
@@ -29,7 +27,8 @@ pub struct InvestmentInfo {
 }
 
 /// Supply is dynamic and tracks the current supply of staked and ERC20 tokens.
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema, Default)]
+#[cw_serde]
+#[derive(Default)]
 pub struct Supply {
     /// issued is how many derivative tokens this contract has issued
     pub issued: Uint128,
