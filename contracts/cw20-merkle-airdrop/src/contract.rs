@@ -578,11 +578,12 @@ pub fn migrate(deps: DepsMut, _env: Env, _msg: MigrateMsg) -> Result<Response, C
 mod tests {
     use super::*;
     use crate::msg::SignatureInfo;
+    use cosmwasm_schema::cw_serde;
     use cosmwasm_std::testing::{
         mock_dependencies, mock_dependencies_with_balance, mock_env, mock_info,
     };
     use cosmwasm_std::{from_binary, from_slice, CosmosMsg, SubMsg, WasmMsg};
-    use serde::Deserialize;
+    use serde::{Deserialize, Serialize};
 
     #[test]
     fn proper_instantiation_cw20() {
@@ -794,7 +795,7 @@ mod tests {
     const TEST_DATA_1: &[u8] = include_bytes!("../testdata/airdrop_stage_1_test_data.json");
     const TEST_DATA_2: &[u8] = include_bytes!("../testdata/airdrop_stage_2_test_data.json");
 
-    #[derive(Deserialize, Debug)]
+    #[cw_serde]
     struct Encoded {
         account: String,
         amount: Uint128,
@@ -1161,14 +1162,14 @@ mod tests {
     const TEST_DATA_1_MULTI: &[u8] =
         include_bytes!("../testdata/airdrop_stage_1_test_multi_data.json");
 
-    #[derive(Deserialize, Debug)]
+    #[cw_serde]
     struct Proof {
         account: String,
         amount: Uint128,
         proofs: Vec<String>,
     }
 
-    #[derive(Deserialize, Debug)]
+    #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
     struct MultipleData {
         total_claimed_amount: Uint128,
         root: String,
@@ -1255,7 +1256,7 @@ mod tests {
             denom: "ujunox".to_string(),
             amount: Uint128::new(1234567),
         }]);
-        let test_data: MultipleData = from_slice(TEST_DATA_1_MULTI).unwrap();
+        let test_data: MultipleData = from_slice::<MultipleData>(TEST_DATA_1_MULTI).unwrap();
 
         let msg = InstantiateMsg {
             owner: Some("owner0000".to_string()),

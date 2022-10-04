@@ -1,11 +1,10 @@
-use schemars::JsonSchema;
-use serde::{Deserialize, Serialize};
-
 use crate::ContractError;
+use cosmwasm_schema::{cw_serde, QueryResponses};
 use cosmwasm_std::{from_slice, Binary, Uint128};
 use cw_utils::{Expiration, Scheduled};
+use serde::{Deserialize, Serialize};
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+#[cw_serde]
 pub struct InstantiateMsg {
     /// Owner if none set to info.sender.
     pub owner: Option<String>,
@@ -13,8 +12,7 @@ pub struct InstantiateMsg {
     pub native_token: Option<String>,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
-#[serde(rename_all = "snake_case")]
+#[cw_serde]
 pub enum ExecuteMsg {
     UpdateConfig {
         /// NewOwner if non sent, contract gets locked. Recipients can receive airdrops
@@ -50,26 +48,23 @@ pub enum ExecuteMsg {
     Withdraw { stage: u8, address: String },
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
-#[serde(rename_all = "snake_case")]
+#[cw_serde]
+#[derive(QueryResponses)]
 pub enum QueryMsg {
+    #[returns(ConfigResponse)]
     Config {},
-    MerkleRoot {
-        stage: u8,
-    },
+    #[returns(MerkleRootResponse)]
+    MerkleRoot { stage: u8 },
+    #[returns(LatestStageResponse)]
     LatestStage {},
-    IsClaimed {
-        stage: u8,
-        address: String,
-    },
-    TotalClaimed {
-        stage: u8,
-    },
+    #[returns(IsClaimedResponse)]
+    IsClaimed { stage: u8, address: String },
+    #[returns(TotalClaimedResponse)]
+    TotalClaimed { stage: u8 },
     // for cross chain airdrops, maps target account to host account
-    AccountMap {
-        stage: u8,
-        external_address: String,
-    },
+    #[returns(AccountMapResponse)]
+    AccountMap { stage: u8, external_address: String },
+    #[returns(AllAccountMapResponse)]
     AllAccountMaps {
         stage: u8,
         start_after: Option<String>,
@@ -77,15 +72,14 @@ pub enum QueryMsg {
     },
 }
 
-#[derive(Serialize, Deserialize, Clone, PartialEq, JsonSchema, Debug)]
-#[serde(rename_all = "snake_case")]
+#[cw_serde]
 pub struct ConfigResponse {
     pub owner: Option<String>,
     pub cw20_token_address: Option<String>,
     pub native_token: Option<String>,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+#[cw_serde]
 pub struct MerkleRootResponse {
     pub stage: u8,
     /// MerkleRoot is hex-encoded merkle root.
@@ -95,37 +89,37 @@ pub struct MerkleRootResponse {
     pub total_amount: Uint128,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+#[cw_serde]
 pub struct LatestStageResponse {
     pub latest_stage: u8,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+#[cw_serde]
 pub struct IsClaimedResponse {
     pub is_claimed: bool,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+#[cw_serde]
 pub struct TotalClaimedResponse {
     pub total_claimed: Uint128,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+#[cw_serde]
 pub struct AccountMapResponse {
     pub host_address: String,
     pub external_address: String,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+#[cw_serde]
 pub struct AllAccountMapResponse {
     pub address_maps: Vec<AccountMapResponse>,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+#[cw_serde]
 pub struct MigrateMsg {}
 
 // Signature verification is done on external airdrop claims.
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+#[cw_serde]
 pub struct SignatureInfo {
     pub claim_msg: Binary,
     pub signature: Binary,
@@ -136,7 +130,8 @@ impl SignatureInfo {
         Ok(claim_msg.address)
     }
 }
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct ClaimMsg {
     // To provide claiming via ledger, the address is passed in the memo field of a cosmos msg.
     #[serde(rename = "memo")]

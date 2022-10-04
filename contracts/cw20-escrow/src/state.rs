@@ -1,12 +1,12 @@
-use schemars::JsonSchema;
-use serde::{Deserialize, Serialize};
+use cosmwasm_schema::cw_serde;
 
 use cosmwasm_std::{Addr, Coin, Env, Order, StdResult, Storage, Timestamp};
 use cw_storage_plus::Map;
 
 use cw20::{Balance, Cw20CoinVerified};
 
-#[derive(Serialize, Deserialize, Clone, PartialEq, JsonSchema, Debug, Default)]
+#[cw_serde]
+#[derive(Default)]
 pub struct GenericBalance {
     pub native: Vec<Coin>,
     pub cw20: Vec<Cw20CoinVerified>,
@@ -47,7 +47,7 @@ impl GenericBalance {
     }
 }
 
-#[derive(Serialize, Deserialize, Clone, PartialEq, JsonSchema, Debug)]
+#[cw_serde]
 pub struct Escrow {
     /// arbiter can decide to approve or refund the escrow
     pub arbiter: Addr,
