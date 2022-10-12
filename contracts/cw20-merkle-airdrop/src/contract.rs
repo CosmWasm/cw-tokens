@@ -665,6 +665,8 @@ pub fn migrate(deps: DepsMut, _env: Env, _msg: MigrateMsg) -> Result<Response, C
             previous_contract: version.contract,
         });
     }
+    let latest_stage = LATEST_STAGE.load(deps.storage)?;
+    STAGE_PAUSED.save(deps.storage, latest_stage, &false)?;
     Ok(Response::default())
 }
 
