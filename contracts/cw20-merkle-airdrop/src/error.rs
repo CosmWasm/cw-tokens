@@ -43,4 +43,13 @@ pub enum ContractError {
 
     #[error("Airdrop stage {stage} begins at {start}")]
     StageNotBegun { stage: u8, start: Scheduled },
+
+    #[error("Airdrop stage {stage} is paused")]
+    StagePaused { stage: u8 },
+
+    #[error("Airdrop stage {stage} is not paused")]
+    StageNotPaused { stage: u8 },
+
+    #[error("Airdrop stage {stage} is already paused")]
+    StageAlreadyPaused { stage: u8 },
 }

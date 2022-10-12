@@ -46,3 +46,6 @@ pub const CLAIMED_AMOUNT: Map<(&Addr, u8), bool> = Map::new(CLAIMED_AMOUNT_PREFI
 
 pub const HRP_PREFIX: &str = "hrp";
 pub const HRP: Map<u8, String> = Map::new(HRP_PREFIX);
+
+pub const STAGE_PAUSED_KEY: &str = "stage_paused";
+pub const STAGE_PAUSED: Map<u8, bool> = Map::new(STAGE_PAUSED_KEY);

@@ -20,7 +20,7 @@ use crate::msg::{
 };
 use crate::state::{
     Config, CLAIM, CONFIG, HRP, LATEST_STAGE, MERKLE_ROOT, STAGE_ACCOUNT_MAP, STAGE_AMOUNT,
-    STAGE_AMOUNT_CLAIMED, STAGE_EXPIRATION, STAGE_START,
+    STAGE_AMOUNT_CLAIMED, STAGE_EXPIRATION, STAGE_PAUSED, STAGE_START,
 };
 
 // Version info, for migration info
@@ -94,6 +94,11 @@ pub fn execute(
         ExecuteMsg::Withdraw { stage, address } => {
             execute_withdraw(deps, env, info, stage, address)
         }
+        ExecuteMsg::Pause { stage } => execute_pause(deps, env, info, stage),
+        ExecuteMsg::Resume {
+            stage,
+            new_expiration,
+        } => execute_resume(deps, env, info, stage, new_expiration),
     }
 }
 
@@ -223,6 +228,11 @@ pub fn execute_claim(
         return Err(ContractError::StageExpired { stage, expiration });
     }
 
+    let is_paused = STAGE_PAUSED.load(deps.storage, stage)?;
+    if is_paused {
+        return Err(ContractError::StagePaused { stage });
+    }
+
     // if present verify signature and extract external address or use info.sender as proof
     // if signature is not present in the message, verification will fail since info.sender is not present in the merkle root
     let proof_addr = match sig_info {
@@ -344,10 +354,13 @@ pub fn execute_burn(
         return Err(ContractError::Unauthorized {});
     }
 
-    // make sure is expired
-    let expiration = STAGE_EXPIRATION.load(deps.storage, stage)?;
-    if !expiration.is_expired(&env.block) {
-        return Err(ContractError::StageNotExpired { stage, expiration });
+    // make sure is expired if the stage is not paused
+    let is_paused = STAGE_PAUSED.load(deps.storage, stage)?;
+    if !is_paused {
+        let expiration = STAGE_EXPIRATION.load(deps.storage, stage)?;
+        if !expiration.is_expired(&env.block) {
+            return Err(ContractError::StageNotExpired { stage, expiration });
+        }
     }
 
     // Get total amount per stage and total claimed
@@ -415,10 +428,13 @@ pub fn execute_withdraw(
         return Err(ContractError::Unauthorized {});
     }
 
-    // make sure is expired
-    let expiration = STAGE_EXPIRATION.load(deps.storage, stage)?;
-    if !expiration.is_expired(&env.block) {
-        return Err(ContractError::StageNotExpired { stage, expiration });
+    // make sure is expired if the stage is not paused
+    let is_paused = STAGE_PAUSED.load(deps.storage, stage)?;
+    if !is_paused {
+        let expiration = STAGE_EXPIRATION.load(deps.storage, stage)?;
+        if !expiration.is_expired(&env.block) {
+            return Err(ContractError::StageNotExpired { stage, expiration });
+        }
     }
 
     // Get total amount per stage and total claimed
@@ -478,6 +494,85 @@ pub fn execute_withdraw(
     Ok(res)
 }
 
+pub fn execute_pause(
+    deps: DepsMut,
+    env: Env,
+    info: MessageInfo,
+    stage: u8,
+) -> Result<Response, ContractError> {
+    // authorize owner
+    let cfg = CONFIG.load(deps.storage)?;
+    let owner = cfg.owner.ok_or(ContractError::Unauthorized {})?;
+    if info.sender != owner {
+        return Err(ContractError::Unauthorized {});
+    }
+
+    let start = STAGE_START.may_load(deps.storage, stage)?;
+    if let Some(start) = start {
+        if !start.is_triggered(&env.block) {
+            return Err(ContractError::StageNotBegun { stage, start });
+        }
+    }
+
+    let expiration = STAGE_EXPIRATION.load(deps.storage, stage)?;
+    if expiration.is_expired(&env.block) {
+        return Err(ContractError::StageExpired { stage, expiration });
+    }
+
+    let is_paused = STAGE_PAUSED.load(deps.storage, stage)?;
+    if is_paused {
+        return Err(ContractError::StageAlreadyPaused { stage });
+    }
+
+    STAGE_PAUSED.save(deps.storage, stage, &true)?;
+    Ok(Response::new().add_attributes(vec![attr("action", "pause"), attr("stage_paused", "true")]))
+}
+
+pub fn execute_resume(
+    deps: DepsMut,
+    env: Env,
+    info: MessageInfo,
+    stage: u8,
+    new_expiration: Option<Expiration>,
+) -> Result<Response, ContractError> {
+    // authorize owner
+    let cfg = CONFIG.load(deps.storage)?;
+    let owner = cfg.owner.ok_or(ContractError::Unauthorized {})?;
+    if info.sender != owner {
+        return Err(ContractError::Unauthorized {});
+    }
+
+    let start = STAGE_START.may_load(deps.storage, stage)?;
+    if let Some(start) = start {
+        if !start.is_triggered(&env.block) {
+            return Err(ContractError::StageNotBegun { stage, start });
+        }
+    }
+
+    let expiration = STAGE_EXPIRATION.load(deps.storage, stage)?;
+    if expiration.is_expired(&env.block) {
+        return Err(ContractError::StageExpired { stage, expiration });
+    }
+
+    let is_paused = STAGE_PAUSED.load(deps.storage, stage)?;
+    if !is_paused {
+        return Err(ContractError::StageNotPaused { stage });
+    }
+
+    if let Some(new_expiration) = new_expiration {
+        if new_expiration.is_expired(&env.block) {
+            return Err(ContractError::StageExpired { stage, expiration });
+        }
+        STAGE_EXPIRATION.save(deps.storage, stage, &new_expiration)?;
+    }
+
+    STAGE_PAUSED.save(deps.storage, stage, &false)?;
+    Ok(Response::new().add_attributes(vec![
+        attr("action", "resume"),
+        attr("stage_paused", "false"),
+    ]))
+}
+
 #[cfg_attr(not(feature = "library"), entry_point)]
 pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
     match msg {
@@ -514,6 +609,7 @@ pub fn query_merkle_root(deps: Deps, stage: u8) -> StdResult<MerkleRootResponse>
     let expiration = STAGE_EXPIRATION.load(deps.storage, stage)?;
     let start = STAGE_START.may_load(deps.storage, stage)?;
     let total_amount = STAGE_AMOUNT.load(deps.storage, stage)?;
+    let is_paused = STAGE_PAUSED.load(deps.storage, stage)?;
 
     let resp = MerkleRootResponse {
         stage,
@@ -521,6 +617,7 @@ pub fn query_merkle_root(deps: Deps, stage: u8) -> StdResult<MerkleRootResponse>
         expiration,
         start,
         total_amount,
+        is_paused,
     };
 
     Ok(resp)

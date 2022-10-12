@@ -43,9 +43,21 @@ pub enum ExecuteMsg {
         sig_info: Option<SignatureInfo>,
     },
     /// Burn the remaining tokens after expire time (only owner)
-    Burn { stage: u8 },
+    Burn {
+        stage: u8,
+    },
     /// Withdraw the remaining tokens after expire time (only owner)
-    Withdraw { stage: u8, address: String },
+    Withdraw {
+        stage: u8,
+        address: String,
+    },
+    Pause {
+        stage: u8,
+    },
+    Resume {
+        stage: u8,
+        new_expiration: Option<Expiration>,
+    },
 }
 
 #[cw_serde]
@@ -87,6 +99,7 @@ pub struct MerkleRootResponse {
     pub expiration: Expiration,
     pub start: Option<Scheduled>,
     pub total_amount: Uint128,
+    pub is_paused: bool,
 }
 
 #[cw_serde]
