@@ -193,6 +193,8 @@ pub fn execute_register_merkle_root(
         HRP.save(deps.storage, stage, &hrp)?;
     }
 
+    STAGE_PAUSED.save(deps.storage, stage, &false)?;
+
     // save total airdropped amount
     let amount = total_amount.unwrap_or_else(Uint128::zero);
     STAGE_AMOUNT.save(deps.storage, stage, &amount)?;
@@ -517,11 +519,6 @@ pub fn execute_pause(
     let expiration = STAGE_EXPIRATION.load(deps.storage, stage)?;
     if expiration.is_expired(&env.block) {
         return Err(ContractError::StageExpired { stage, expiration });
-    }
-
-    let is_paused = STAGE_PAUSED.load(deps.storage, stage)?;
-    if is_paused {
-        return Err(ContractError::StageAlreadyPaused { stage });
     }
 
     STAGE_PAUSED.save(deps.storage, stage, &true)?;
@@ -2027,6 +2024,7 @@ mod tests {
     mod external_sig {
         use super::*;
         use crate::msg::SignatureInfo;
+        use cw_utils::Expiration::AtHeight;
 
         const TEST_DATA_EXTERNAL_SIG: &[u8] =
             include_bytes!("../testdata/airdrop_external_sig_test_data.json");
@@ -2190,6 +2188,319 @@ mod tests {
             .unwrap();
             assert_eq!(map.external_address, test_data.account);
             assert_eq!(map.host_address, claim_addr);
+        }
+
+        #[test]
+        fn claim_paused_airdrop() {
+            let mut deps = mock_dependencies_with_balance(&[Coin {
+                denom: "ujunox".to_string(),
+                amount: Uint128::new(1234567),
+            }]);
+            let test_data: Encoded = from_slice(TEST_DATA_1).unwrap();
+
+            let msg = InstantiateMsg {
+                owner: Some("owner0000".to_string()),
+                cw20_token_address: None,
+                native_token: Some("ujunox".to_string()),
+            };
+
+            let env = mock_env();
+            let info = mock_info("addr0000", &[]);
+            let _res = instantiate(deps.as_mut(), env, info, msg).unwrap();
+
+            let env = mock_env();
+            let info = mock_info("owner0000", &[]);
+            let msg = ExecuteMsg::RegisterMerkleRoot {
+                merkle_root: test_data.root,
+                expiration: None,
+                start: None,
+                total_amount: None,
+                hrp: None,
+            };
+            let _res = execute(deps.as_mut(), env, info, msg).unwrap();
+
+            let pause_msg = ExecuteMsg::Pause { stage: 1u8 };
+            let env = mock_env();
+            let info = mock_info("owner0000", &[]);
+            let result = execute(deps.as_mut(), env, info, pause_msg).unwrap();
+
+            assert_eq!(
+                result.attributes,
+                vec![attr("action", "pause"), attr("stage_paused", "true"),]
+            );
+
+            let msg = ExecuteMsg::Claim {
+                amount: test_data.amount,
+                stage: 1u8,
+                proof: test_data.proofs.clone(),
+                sig_info: None,
+            };
+
+            let env = mock_env();
+            let info = mock_info(test_data.account.as_str(), &[]);
+            let res = execute(deps.as_mut(), env, info, msg).unwrap_err();
+
+            assert_eq!(res, ContractError::StagePaused { stage: 1u8 });
+
+            let resume_msg = ExecuteMsg::Resume {
+                stage: 1u8,
+                new_expiration: Some(Expiration::AtHeight(12346)),
+            };
+            let env = mock_env();
+            let info = mock_info("owner0000", &[]);
+            let result = execute(deps.as_mut(), env, info, resume_msg).unwrap();
+
+            assert_eq!(
+                result.attributes,
+                vec![attr("action", "resume"), attr("stage_paused", "false"),]
+            );
+            let msg = ExecuteMsg::Claim {
+                amount: test_data.amount,
+                stage: 1u8,
+                proof: test_data.proofs.clone(),
+                sig_info: None,
+            };
+            let env = mock_env();
+            let info = mock_info(test_data.account.as_str(), &[]);
+            let res = execute(deps.as_mut(), env, info, msg).unwrap();
+            let expected = SubMsg::new(CosmosMsg::Bank(BankMsg::Send {
+                to_address: test_data.account.clone(),
+                amount: vec![Coin {
+                    denom: "ujunox".to_string(),
+                    amount: test_data.amount,
+                }],
+            }));
+            assert_eq!(res.messages, vec![expected]);
+
+            assert_eq!(
+                res.attributes,
+                vec![
+                    attr("action", "claim"),
+                    attr("stage", "1"),
+                    attr("address", test_data.account.clone()),
+                    attr("amount", test_data.amount),
+                ]
+            );
+        }
+        #[test]
+        fn withdraw_paused_airdrop() {
+            let mut deps = mock_dependencies_with_balance(&[Coin {
+                denom: "ujunox".to_string(),
+                amount: Uint128::new(10000),
+            }]);
+            let test_data: Encoded = from_slice(TEST_DATA_1).unwrap();
+
+            let msg = InstantiateMsg {
+                owner: Some("owner0000".to_string()),
+                cw20_token_address: None,
+                native_token: Some("ujunox".to_string()),
+            };
+
+            let env = mock_env();
+            let info = mock_info("addr0000", &[]);
+            let _res = instantiate(deps.as_mut(), env.clone(), info, msg).unwrap();
+
+            let info = mock_info("owner0000", &[]);
+            let msg = ExecuteMsg::RegisterMerkleRoot {
+                merkle_root: test_data.root,
+                expiration: Some(Expiration::AtHeight(12500)),
+                start: None,
+                total_amount: Some(Uint128::new(10000)),
+                hrp: None,
+            };
+            execute(deps.as_mut(), env.clone(), info, msg).unwrap();
+
+            // Claim some tokens
+            let msg = ExecuteMsg::Claim {
+                amount: test_data.amount,
+                stage: 1u8,
+                proof: test_data.proofs,
+                sig_info: None,
+            };
+
+            let info = mock_info(test_data.account.as_str(), &[]);
+            let res = execute(deps.as_mut(), env.clone(), info, msg).unwrap();
+            let expected = SubMsg::new(CosmosMsg::Bank(BankMsg::Send {
+                to_address: test_data.account.clone(),
+                amount: vec![Coin {
+                    denom: "ujunox".to_string(),
+                    amount: test_data.amount,
+                }],
+            }));
+            assert_eq!(res.messages, vec![expected]);
+
+            assert_eq!(
+                res.attributes,
+                vec![
+                    attr("action", "claim"),
+                    attr("stage", "1"),
+                    attr("address", test_data.account.clone()),
+                    attr("amount", test_data.amount),
+                ]
+            );
+
+            // Can't withdraw before pause
+            let msg = ExecuteMsg::Withdraw {
+                stage: 1u8,
+                address: "addr0005".to_string(),
+            };
+
+            let info = mock_info("owner0000", &[]);
+            let res = execute(deps.as_mut(), env, info, msg).unwrap_err();
+
+            assert_eq!(
+                res,
+                ContractError::StageNotExpired {
+                    stage: 1u8,
+                    expiration: AtHeight(12500)
+                }
+            );
+
+            let pause_msg = ExecuteMsg::Pause { stage: 1u8 };
+            let env = mock_env();
+            let info = mock_info("owner0000", &[]);
+            let result = execute(deps.as_mut(), env.clone(), info, pause_msg).unwrap();
+
+            assert_eq!(
+                result.attributes,
+                vec![attr("action", "pause"), attr("stage_paused", "true"),]
+            );
+            //Withdraw when paused
+            let msg = ExecuteMsg::Withdraw {
+                stage: 1u8,
+                address: "addr0005".to_string(),
+            };
+
+            let info = mock_info("owner0000", &[]);
+            let res = execute(deps.as_mut(), env, info, msg).unwrap();
+
+            let expected = SubMsg::new(CosmosMsg::Bank(BankMsg::Send {
+                to_address: "addr0005".to_string(),
+                amount: vec![Coin {
+                    denom: "ujunox".to_string(),
+                    amount: Uint128::new(9900),
+                }],
+            }));
+            assert_eq!(res.messages, vec![expected]);
+
+            assert_eq!(
+                res.attributes,
+                vec![
+                    attr("action", "withdraw"),
+                    attr("stage", "1"),
+                    attr("address", "owner0000"),
+                    attr("amount", Uint128::new(9900)),
+                    attr("recipient", "addr0005"),
+                ]
+            );
+        }
+
+        #[test]
+        fn can_burn_native() {
+            let mut deps = mock_dependencies_with_balance(&[Coin {
+                denom: "ujunox".to_string(),
+                amount: Uint128::new(10000),
+            }]);
+
+            let test_data: Encoded = from_slice(TEST_DATA_1).unwrap();
+
+            let msg = InstantiateMsg {
+                owner: Some("owner0000".to_string()),
+                cw20_token_address: None,
+                native_token: Some("ujunox".to_string()),
+            };
+
+            let env = mock_env();
+            let info = mock_info("addr0000", &[]);
+            let _res = instantiate(deps.as_mut(), env.clone(), info, msg).unwrap();
+
+            let info = mock_info("owner0000", &[]);
+            let msg = ExecuteMsg::RegisterMerkleRoot {
+                merkle_root: test_data.root,
+                expiration: Some(Expiration::AtHeight(12500)),
+                start: None,
+                total_amount: Some(Uint128::new(10000)),
+                hrp: None,
+            };
+            execute(deps.as_mut(), env.clone(), info, msg).unwrap();
+
+            // Claim some tokens
+            let msg = ExecuteMsg::Claim {
+                amount: test_data.amount,
+                stage: 1u8,
+                proof: test_data.proofs,
+                sig_info: None,
+            };
+
+            let info = mock_info(test_data.account.as_str(), &[]);
+            let res = execute(deps.as_mut(), env.clone(), info, msg).unwrap();
+            let expected = SubMsg::new(CosmosMsg::Bank(BankMsg::Send {
+                to_address: test_data.account.clone(),
+                amount: vec![Coin {
+                    denom: "ujunox".to_string(),
+                    amount: test_data.amount,
+                }],
+            }));
+            assert_eq!(res.messages, vec![expected]);
+
+            assert_eq!(
+                res.attributes,
+                vec![
+                    attr("action", "claim"),
+                    attr("stage", "1"),
+                    attr("address", test_data.account.clone()),
+                    attr("amount", test_data.amount),
+                ]
+            );
+
+            // Not expired yet. Can't burn before pause
+            let msg = ExecuteMsg::Burn { stage: 1u8 };
+
+            let info = mock_info("owner0000", &[]);
+            let res = execute(deps.as_mut(), env, info, msg).unwrap_err();
+
+            assert_eq!(
+                res,
+                ContractError::StageNotExpired {
+                    stage: 1u8,
+                    expiration: AtHeight(12500)
+                }
+            );
+
+            //Pause the stage
+            let pause_msg = ExecuteMsg::Pause { stage: 1u8 };
+            let env = mock_env();
+            let info = mock_info("owner0000", &[]);
+            let result = execute(deps.as_mut(), env.clone(), info, pause_msg).unwrap();
+
+            assert_eq!(
+                result.attributes,
+                vec![attr("action", "pause"), attr("stage_paused", "true"),]
+            );
+
+            //Burn when paused
+            let msg = ExecuteMsg::Burn { stage: 1u8 };
+
+            let info = mock_info("owner0000", &[]);
+            let res = execute(deps.as_mut(), env, info, msg).unwrap();
+
+            let expected = SubMsg::new(CosmosMsg::Bank(BankMsg::Burn {
+                amount: vec![Coin {
+                    denom: "ujunox".to_string(),
+                    amount: Uint128::new(9900),
+                }],
+            }));
+            assert_eq!(res.messages, vec![expected]);
+
+            assert_eq!(
+                res.attributes,
+                vec![
+                    attr("action", "burn"),
+                    attr("stage", "1"),
+                    attr("address", "owner0000"),
+                    attr("amount", Uint128::new(9900)),
+                ]
+            );
         }
     }
 }
