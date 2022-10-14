@@ -13,9 +13,10 @@ use std::convert::TryInto;
 
 use crate::error::ContractError;
 use crate::helpers::CosmosSignature;
+use crate::migrations::v0_12_1;
 use crate::msg::{
     AccountMapResponse, ConfigResponse, ExecuteMsg, InstantiateMsg, IsClaimedResponse,
-    LatestStageResponse, MerkleRootResponse, MigrateMsg, QueryMsg, SignatureInfo,
+    IsPausedResponse, LatestStageResponse, MerkleRootResponse, MigrateMsg, QueryMsg, SignatureInfo,
     TotalClaimedResponse,
 };
 use crate::state::{
@@ -579,6 +580,7 @@ pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
         QueryMsg::IsClaimed { stage, address } => {
             to_binary(&query_is_claimed(deps, stage, address)?)
         }
+        QueryMsg::IsPaused { stage } => to_binary(&query_is_paused(deps, stage)?),
         QueryMsg::TotalClaimed { stage } => to_binary(&query_total_claimed(deps, stage)?),
         QueryMsg::AccountMap {
             stage,
@@ -606,7 +608,6 @@ pub fn query_merkle_root(deps: Deps, stage: u8) -> StdResult<MerkleRootResponse>
     let expiration = STAGE_EXPIRATION.load(deps.storage, stage)?;
     let start = STAGE_START.may_load(deps.storage, stage)?;
     let total_amount = STAGE_AMOUNT.load(deps.storage, stage)?;
-    let is_paused = STAGE_PAUSED.load(deps.storage, stage)?;
 
     let resp = MerkleRootResponse {
         stage,
@@ -614,7 +615,6 @@ pub fn query_merkle_root(deps: Deps, stage: u8) -> StdResult<MerkleRootResponse>
         expiration,
         start,
         total_amount,
-        is_paused,
     };
 
     Ok(resp)
@@ -632,6 +632,13 @@ pub fn query_is_claimed(deps: Deps, stage: u8, address: String) -> StdResult<IsC
         .may_load(deps.storage, (address, stage))?
         .unwrap_or(false);
     let resp = IsClaimedResponse { is_claimed };
+
+    Ok(resp)
+}
+
+pub fn query_is_paused(deps: Deps, stage: u8) -> StdResult<IsPausedResponse> {
+    let is_paused = STAGE_PAUSED.may_load(deps.storage, stage)?.unwrap_or(false);
+    let resp = IsPausedResponse { is_paused };
 
     Ok(resp)
 }
@@ -659,15 +666,20 @@ pub fn query_address_map(
 
 #[cfg_attr(not(feature = "library"), entry_point)]
 pub fn migrate(deps: DepsMut, _env: Env, _msg: MigrateMsg) -> Result<Response, ContractError> {
-    let version = get_contract_version(deps.storage)?;
-    if version.contract != CONTRACT_NAME {
+    let contract_info = get_contract_version(deps.storage)?;
+    if contract_info.contract != CONTRACT_NAME {
         return Err(ContractError::CannotMigrate {
-            previous_contract: version.contract,
+            previous_contract: contract_info.contract,
         });
     }
-    let latest_stage = LATEST_STAGE.load(deps.storage)?;
-    STAGE_PAUSED.save(deps.storage, latest_stage, &false)?;
-    Ok(Response::default())
+    if contract_info.version == "0.12.1" {
+        v0_12_1::set_initial_pause_status(deps)?;
+        Ok(Response::default())
+    } else {
+        Err(ContractError::CannotMigrate {
+            previous_contract: contract_info.version,
+        })
+    }
 }
 
 #[cfg(test)]

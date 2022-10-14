@@ -82,6 +82,8 @@ pub enum QueryMsg {
         start_after: Option<String>,
         limit: Option<u32>,
     },
+    #[returns(IsPausedResponse)]
+    IsPaused { stage: u8 },
 }
 
 #[cw_serde]
@@ -99,7 +101,6 @@ pub struct MerkleRootResponse {
     pub expiration: Expiration,
     pub start: Option<Scheduled>,
     pub total_amount: Uint128,
-    pub is_paused: bool,
 }
 
 #[cw_serde]
@@ -110,6 +111,11 @@ pub struct LatestStageResponse {
 #[cw_serde]
 pub struct IsClaimedResponse {
     pub is_claimed: bool,
+}
+
+#[cw_serde]
+pub struct IsPausedResponse {
+    pub is_paused: bool,
 }
 
 #[cw_serde]
