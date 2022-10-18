@@ -1,6 +1,7 @@
 #[cfg(not(feature = "library"))]
 use cosmwasm_std::{
-    entry_point, from_binary, to_binary, Addr, Binary, Deps, DepsMut, Env, MessageInfo, Response, StdResult,
+    entry_point, from_binary, to_binary, Addr, Binary, Deps, DepsMut, Env, MessageInfo, Response,
+    StdResult,
 };
 use cw2::set_contract_version;
 
@@ -13,7 +14,6 @@ use cw20::{Balance, Cw20CoinVerified, Cw20ReceiveMsg};
 const CONTRACT_NAME: &str = "crates.io:cw20_receiver_minimal";
 const CONTRACT_VERSION: &str = env!("CARGO_PKG_VERSION");
 
-
 // Instantiate entry point
 #[cfg_attr(not(feature = "library"), entry_point)]
 pub fn instantiate(
@@ -22,7 +22,6 @@ pub fn instantiate(
     info: MessageInfo,
     msg: InstantiateMsg,
 ) -> Result<Response, ContractError> {
-
     set_contract_version(deps.storage, CONTRACT_NAME, CONTRACT_VERSION)?;
 
     let admin = info.sender.to_string();
@@ -96,7 +95,6 @@ pub fn execute_business_logic(
     _cw20_contract_addr: &Addr,
     _balance: Balance,
 ) -> Result<Response, ContractError> {
-
     // The cw20 received is now accessible under "balance",
     // and you could implement some business logic that uses it here
 

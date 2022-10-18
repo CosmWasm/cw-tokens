@@ -13,6 +13,5 @@ pub enum ContractError {
     NotWhitelisted {},
 
     #[error("Invalid address format: {address}")]
-    InvalidAddressFormat {address: String},
-
+    InvalidAddressFormat { address: String },
 }

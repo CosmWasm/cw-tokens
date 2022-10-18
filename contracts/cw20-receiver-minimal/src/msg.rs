@@ -1,7 +1,7 @@
-use cosmwasm_std::{Deps, Addr};
-use cosmwasm_schema::{cw_serde, QueryResponses};
-use cw20::Cw20ReceiveMsg;
 use crate::error::ContractError;
+use cosmwasm_schema::{cw_serde, QueryResponses};
+use cosmwasm_std::{Addr, Deps};
+use cw20::Cw20ReceiveMsg;
 
 #[cw_serde]
 pub struct InstantiateMsg {
@@ -10,9 +10,8 @@ pub struct InstantiateMsg {
 
 pub fn validate_whitelist(
     deps: Deps,
-    whitelist: Vec<(String, String)>
+    whitelist: Vec<(String, String)>,
 ) -> Result<Vec<(String, Addr)>, ContractError> {
-
     let validated_whitelist: Result<Vec<_>, ContractError> = whitelist
         .iter()
         .map(|unchecked| {
