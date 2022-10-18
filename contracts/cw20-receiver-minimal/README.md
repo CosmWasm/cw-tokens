@@ -4,10 +4,8 @@ This is a minimal example of a CosmWasm contract that implements the [Cw20 Recei
 
 ---
 
-**NOTE - This contract is only meant to be an example of how the cw20 receiver interface can be implemented, it is by no means production ready**
+**NOTE - This contract is only meant to be an example of how the cw20 receiver interface can be implemented, it effectively "does nothing"**
 
-This contract accept will accept a receive message from **any** smart contract, it has no logic to verify that the sending contract correctly implements the Cw20 spec.
+This contract will accept a receive message from **any** smart contract, it has no logic to verify that the sending contract correctly implements the Cw20 spec
 
-**You will most likely want to implement some additional custom logic (for example a whitelist) to verify that the messages are coming from a smart contract you want to accept messages from**
-
-There is a simple example included to show how a whitelist could be implemented
+There is a simple example included to show how a whitelist could be added and implemented on instantiation

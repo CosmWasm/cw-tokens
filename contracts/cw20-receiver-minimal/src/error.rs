@@ -12,6 +12,7 @@ pub enum ContractError {
     #[error("Address not whitelisted")]
     NotWhitelisted {},
 
-    #[error("To Do Error")]
-    ToDo {},
+    #[error("Invalid address format: {address}")]
+    InvalidAddressFormat {address: String},
+
 }

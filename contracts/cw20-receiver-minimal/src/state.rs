@@ -4,7 +4,7 @@ use cw_storage_plus::Item;
 use cw20::{Balance};
 use crate::error::*;
 
-// Config with contract admin
+// Config with contract admin and whitelist
 pub const CONFIG: Item<Config> = Item::new("config");
 
 #[cw_serde]
@@ -19,7 +19,7 @@ pub fn is_balance_whitelisted(
 ) -> Result<(), ContractError> {
 
     // config.cw20_wl has (Token symbol, Token contract address)
-    // ex: (NETA, juno168ctmpyppk90d34p3jjy658zf5a5l3w8wk35wht6ccqj4mr0yv8s4j5awr)
+    // ex: (COIN, juno1xyz...)
 
     let cw20_whitelist_addrs: Vec<Addr> = config.cw20_wl
     .iter()
