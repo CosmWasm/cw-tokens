@@ -43,9 +43,21 @@ pub enum ExecuteMsg {
         sig_info: Option<SignatureInfo>,
     },
     /// Burn the remaining tokens after expire time (only owner)
-    Burn { stage: u8 },
+    Burn {
+        stage: u8,
+    },
     /// Withdraw the remaining tokens after expire time (only owner)
-    Withdraw { stage: u8, address: String },
+    Withdraw {
+        stage: u8,
+        address: String,
+    },
+    Pause {
+        stage: u8,
+    },
+    Resume {
+        stage: u8,
+        new_expiration: Option<Expiration>,
+    },
 }
 
 #[cw_serde]
@@ -70,6 +82,8 @@ pub enum QueryMsg {
         start_after: Option<String>,
         limit: Option<u32>,
     },
+    #[returns(IsPausedResponse)]
+    IsPaused { stage: u8 },
 }
 
 #[cw_serde]
@@ -97,6 +111,11 @@ pub struct LatestStageResponse {
 #[cw_serde]
 pub struct IsClaimedResponse {
     pub is_claimed: bool,
+}
+
+#[cw_serde]
+pub struct IsPausedResponse {
+    pub is_paused: bool,
 }
 
 #[cw_serde]
