@@ -11,7 +11,7 @@ pub struct Config {
 
 pub const CONFIG: Item<Config> = Item::new("config");
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct Stream {
     pub owner: Addr,
     pub recipient: Addr,
