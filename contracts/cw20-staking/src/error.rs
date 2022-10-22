@@ -33,6 +33,9 @@ pub enum ContractError {
     #[error("Cannot set to own account")]
     CannotSetOwnAccount {},
 
+    #[error("Invalid expiration")]
+    InvalidExpiration {},
+
     #[error("Invalid zero amount")]
     InvalidZeroAmount {},
 
@@ -56,7 +59,8 @@ impl From<cw20_base::ContractError> for ContractError {
             cw20_base::ContractError::Unauthorized {} => ContractError::Unauthorized {},
             cw20_base::ContractError::CannotSetOwnAccount {} => {
                 ContractError::CannotSetOwnAccount {}
-            }
+            },
+            cw20_base::ContractError::InvalidExpiration {} => ContractError::InvalidExpiration {},
             cw20_base::ContractError::InvalidZeroAmount {} => ContractError::InvalidZeroAmount {},
             cw20_base::ContractError::Expired {} => ContractError::Expired {},
             cw20_base::ContractError::NoAllowance {} => ContractError::NoAllowance {},
