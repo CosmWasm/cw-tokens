@@ -29,13 +29,13 @@ optimize = """docker run --rm -v "$(pwd)":/code \
 """
 
 [dependencies]
-cosmwasm-std = "1.1.0"
-cosmwasm-storage = "1.1.0"
+cosmwasm-std = "1.1.5"
+cosmwasm-storage = "1.1.5"
 cw-storage-plus = "0.13.4"
 cw2 = "0.13.4"
 cw20 = "0.13.4"
 serde = { version = "1.0.137", default-features = false, features = ["derive"] }
 thiserror = "1.0.31"
-cosmwasm-schema = "1.1.0"
+cosmwasm-schema = "1.1.5"
 [dev-dependencies]
 
