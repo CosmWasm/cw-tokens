@@ -325,7 +325,7 @@ dependencies = [
 
 [[package]]
 name = "cw20-atomic-swap"
-version = "0.13.1"
+version = "0.14.0"
 dependencies = [
  "cosmwasm-schema",
  "cosmwasm-std",
@@ -358,7 +358,7 @@ dependencies = [
 
 [[package]]
 name = "cw20-bonding"
-version = "0.13.1"
+version = "0.14.0"
 dependencies = [
  "cosmwasm-schema",
  "cosmwasm-std",
@@ -375,7 +375,7 @@ dependencies = [
 
 [[package]]
 name = "cw20-escrow"
-version = "0.13.1"
+version = "0.14.0"
 dependencies = [
  "cosmwasm-schema",
  "cosmwasm-std",
@@ -390,7 +390,7 @@ dependencies = [
 
 [[package]]
 name = "cw20-merkle-airdrop"
-version = "0.13.1"
+version = "0.14.0"
 dependencies = [
  "bech32",
  "cosmwasm-schema",
@@ -408,7 +408,7 @@ dependencies = [
 
 [[package]]
 name = "cw20-staking"
-version = "0.13.1"
+version = "0.14.0"
 dependencies = [
  "cosmwasm-schema",
  "cosmwasm-std",
@@ -423,7 +423,7 @@ dependencies = [
 
 [[package]]
 name = "cw20-streams"
-version = "0.13.1"
+version = "0.14.0"
 dependencies = [
  "cosmwasm-schema",
  "cosmwasm-std",
