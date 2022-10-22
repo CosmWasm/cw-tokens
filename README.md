@@ -14,13 +14,13 @@ You are more than welcome to [create a PR](https://github.com/CosmWasm/cw-tokens
 contract you have written that you would like to share with the community.
 
 
-| Contracts               | Download                                                                                                                      | Docs                                                                     |
-| ----------------------- | ----------------------------------------------------------------------------------------------------------------------------  | -------------------------------------------------------------------------|
-| cw20-atomic-swap        | [Release v0.11.2](https://github.com/CosmWasm/cw-tokens/releases/download/v0.11.2/cw20_atomic_swap.wasm)          | [![Docs](https://docs.rs/cw20-atomic-swap/badge.svg)](https://docs.rs/cw20-atomic-swap)    |
-| cw20-bonding            | [Release v0.11.2](https://github.com/CosmWasm/cw-tokens/releases/download/v0.11.2/cw20_bonding.wasm)          | [![Docs](https://docs.rs/cw20-bonding/badge.svg)](https://docs.rs/cw20-bonding)    |
-| cw20-escrow             | [Release v0.11.2](https://github.com/CosmWasm/cw-tokens/releases/download/v0.11.2/cw20_escrow.wasm)          | [![Docs](https://docs.rs/cw20-escrow/badge.svg)](https://docs.rs/cw20-escrow)    |
-| cw20-staking            | [Release v0.11.2](https://github.com/CosmWasm/cw-tokens/releases/download/v0.11.2/cw20_staking.wasm)          | [![Docs](https://docs.rs/cw20-staking/badge.svg)](https://docs.rs/cw20-staking)    |
-| cw20-merkle-airdrop     | [Release v0.11.2](https://github.com/CosmWasm/cw-tokens/releases/download/v0.11.2/cw20_merkle_airdrop.wasm)          | [![Docs](https://docs.rs/cw20-merkle-airdrop/badge.svg)](https://docs.rs/cw20-merkle-airdrop)    |
+| Contracts               | Download                                                                                                    | Docs                                                                     |
+| ----------------------- |-------------------------------------------------------------------------------------------------------------| -------------------------------------------------------------------------|
+| cw20-atomic-swap        | [Release v0.14.0](https://github.com/CosmWasm/cw-tokens/releases/download/v0.14.0/cw20_atomic_swap.wasm)    | [![Docs](https://docs.rs/cw20-atomic-swap/badge.svg)](https://docs.rs/cw20-atomic-swap)    |
+| cw20-bonding            | [Release v0.14.0](https://github.com/CosmWasm/cw-tokens/releases/download/v0.14.0/cw20_bonding.wasm)        | [![Docs](https://docs.rs/cw20-bonding/badge.svg)](https://docs.rs/cw20-bonding)    |
+| cw20-escrow             | [Release v0.14.0](https://github.com/CosmWasm/cw-tokens/releases/download/v0.14.0/cw20_escrow.wasm)         | [![Docs](https://docs.rs/cw20-escrow/badge.svg)](https://docs.rs/cw20-escrow)    |
+| cw20-staking            | [Release v0.14.0](https://github.com/CosmWasm/cw-tokens/releases/download/v0.14.0/cw20_staking.wasm)        | [![Docs](https://docs.rs/cw20-staking/badge.svg)](https://docs.rs/cw20-staking)    |
+| cw20-merkle-airdrop     | [Release v0.14.0](https://github.com/CosmWasm/cw-tokens/releases/download/v0.14.0/cw20_merkle_airdrop.wasm) | [![Docs](https://docs.rs/cw20-merkle-airdrop/badge.svg)](https://docs.rs/cw20-merkle-airdrop)    |
 
 **Warning** None of these contracts have been audited and no liability is
 assumed for the use of this code. They are provided to turbo-start
@@ -55,7 +55,7 @@ To compile all the contracts, run the following in the repo root:
 docker run --rm -v "$(pwd)":/code \
   --mount type=volume,source="$(basename "$(pwd)")_cache",target=/code/target \
   --mount type=volume,source=registry_cache,target=/usr/local/cargo/registry \
-  cosmwasm/workspace-optimizer:0.12.4
+  cosmwasm/workspace-optimizer:0.12.8
 ```
 
 This will compile all packages in the `contracts` directory and output the
