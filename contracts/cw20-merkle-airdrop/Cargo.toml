@@ -1,6 +1,6 @@
 [package]
 name = "cw20-merkle-airdrop"
-version = "0.14.0"
+version = "0.14.1"
 authors = ["Orkun Kulce <orkunkl@users.noreply.github.com>", "Terraform Labs, PTE."]
 edition = "2018"
 description = "An Airdrop contract for allowing users to claim rewards with Merkle Tree based proof"
@@ -35,4 +35,5 @@ ripemd = "0.1.1"
 bech32 = "0.9.0"
 cosmwasm-schema = "1.1.5"
 [dev-dependencies]
-
+cw20-base = { version = "0.16.0", features = ["library"] }
+cw-multi-test = "0.16.0"

@@ -50,6 +50,7 @@ pub enum ExecuteMsg {
     Withdraw {
         stage: u8,
         address: String,
+        amount: Option<Uint128>,
     },
     Pause {
         stage: u8,
