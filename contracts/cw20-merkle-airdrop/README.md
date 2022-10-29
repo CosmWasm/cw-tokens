@@ -50,8 +50,9 @@ Uses **SHA256** for merkle root tree construction.
 
 ```rust
 pub struct InstantiateMsg {
-  pub owner: String,
-  pub cw20_token_address: String,
+  pub owner: Option<String>,
+  pub cw20_token_address: Option<String>,
+  pub native_token: Option<String>,
 }
 ```
 
@@ -60,15 +61,40 @@ pub struct InstantiateMsg {
 ```rust
 pub enum ExecuteMsg {
   UpdateConfig {
-    owner: Option<String>,
+    new_owner: Option<String>,
+    new_cw20_address: Option<String>,
+    new_native_token: Option<String>,
   },
   RegisterMerkleRoot {
     merkle_root: String,
+    expiration: Option<Expiration>,
+    start: Option<Scheduled>,
+    total_amount: Option<Uint128>,
+    hrp: Option<String>,
   },
   Claim {
     stage: u8,
     amount: Uint128,
     proof: Vec<String>,
+    /// Enables cross chain airdrops.
+    /// Target wallet proves identity by sending a signed [SignedClaimMsg](SignedClaimMsg)
+    /// containing the recipient address.
+    sig_info: Option<SignatureInfo>,
+  },
+  Burn {
+      stage: u8,
+  },
+  /// Withdraw the remaining tokens after expire time (only owner)
+  Withdraw {
+      stage: u8,
+      address: String,
+  },
+  Pause {
+      stage: u8,
+  },
+  Resume {
+      stage: u8,
+      new_expiration: Option<Expiration>,
   },
 }
 ```
@@ -87,6 +113,14 @@ pub enum QueryMsg {
     MerkleRoot { stage: u8 },
     LatestStage {},
     IsClaimed { stage: u8, address: String },
+    TotalClaimed { stage: u8 },
+    AccountMap { stage: u8, external_address: String },
+    AllAccountMaps {
+        stage: u8,
+        start_after: Option<String>,
+        limit: Option<u32>,
+    },
+    IsPaused { stage: u8 },
 }
 ```
 
