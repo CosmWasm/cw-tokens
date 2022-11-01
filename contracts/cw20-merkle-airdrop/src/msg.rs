@@ -53,7 +53,7 @@ pub enum ExecuteMsg {
     },
     /// Burn all of the remaining tokens that the contract owns (only owner)
     BurnAll {},
-    /// Withdraw all/some of the remaining token that the contract owns (only owner)
+    /// Withdraw all/some of the remaining tokens that the contract owns (only owner)
     WithdrawAll {
         address: String,
         amount: Option<Uint128>,
