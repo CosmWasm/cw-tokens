@@ -42,14 +42,21 @@ pub enum ExecuteMsg {
         /// containing the recipient address.
         sig_info: Option<SignatureInfo>,
     },
-    /// Burn the remaining tokens after expire time (only owner)
+    /// Burn the remaining tokens in the stage after expiry time (only owner)
     Burn {
         stage: u8,
     },
-    /// Withdraw the remaining tokens after expire time (only owner)
+    /// Withdraw the remaining tokens in the stage after expiry time (only owner)
     Withdraw {
         stage: u8,
         address: String,
+    },
+    /// Burn all of the remaining tokens that the contract owns (only owner)
+    BurnAll {},
+    /// Withdraw all/some of the remaining tokens that the contract owns (only owner)
+    WithdrawAll {
+        address: String,
+        amount: Option<Uint128>,
     },
     Pause {
         stage: u8,
