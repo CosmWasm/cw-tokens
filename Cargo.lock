@@ -390,7 +390,7 @@ dependencies = [
 
 [[package]]
 name = "cw20-merkle-airdrop"
-version = "0.14.0"
+version = "0.14.1"
 dependencies = [
  "bech32",
  "cosmwasm-schema",
