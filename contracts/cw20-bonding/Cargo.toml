@@ -1,6 +1,6 @@
 [package]
 name = "cw20-bonding"
-version = "0.14.0"
+version = "0.14.1"
 authors = ["Ethan Frey <ethanfrey@users.noreply.github.com>"]
 edition = "2018"
 description = "Implement basic bonding curve to issue cw20 tokens"
