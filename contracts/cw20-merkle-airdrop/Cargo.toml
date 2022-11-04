@@ -1,6 +1,6 @@
 [package]
 name = "cw20-merkle-airdrop"
-version = "0.14.0"
+version = "0.14.1"
 authors = ["Orkun Kulce <orkunkl@users.noreply.github.com>", "Terraform Labs, PTE."]
 edition = "2018"
 description = "An Airdrop contract for allowing users to claim rewards with Merkle Tree based proof"
