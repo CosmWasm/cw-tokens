@@ -34,6 +34,7 @@ sha2 = { version = "0.9.9", default-features = false }
 ripemd = "0.1.1"
 bech32 = "0.9.0"
 cosmwasm-schema = "1.1.5"
+semver = "1.0.14"
 [dev-dependencies]
 cw20-base = { version = "0.16.0", features = ["library"] }
 cw-multi-test = "0.16.0"
