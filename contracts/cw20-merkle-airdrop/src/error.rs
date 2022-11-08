@@ -49,4 +49,13 @@ pub enum ContractError {
 
     #[error("Airdrop stage {stage} is not paused")]
     StageNotPaused { stage: u8 },
+
+    #[error("Semver parsing error: {0}")]
+    SemVer(String),
+}
+
+impl From<semver::Error> for ContractError {
+    fn from(err: semver::Error) -> Self {
+        Self::SemVer(err.to_string())
+    }
 }

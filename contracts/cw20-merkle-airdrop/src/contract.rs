@@ -8,6 +8,7 @@ use cosmwasm_std::{
 use cw2::{get_contract_version, set_contract_version};
 use cw20::{BalanceResponse, Cw20Contract, Cw20ExecuteMsg, Cw20QueryMsg};
 use cw_utils::{Expiration, Scheduled};
+use semver::Version;
 use sha2::Digest;
 use std::convert::TryInto;
 
@@ -847,10 +848,11 @@ pub fn migrate(deps: DepsMut, _env: Env, _msg: MigrateMsg) -> Result<Response, C
             previous_contract: contract_info.contract,
         });
     }
-    if contract_info.version == "0.12.1" {
+    let contract_version: Version = contract_info.version.parse()?;
+    let current_version: Version = CONTRACT_VERSION.parse()?;
+    if contract_version < current_version {
+        set_contract_version(deps.storage, CONTRACT_NAME, CONTRACT_VERSION)?;
         v0_12_1::set_initial_pause_status(deps)?;
-        Ok(Response::default())
-    } else if contract_info.version == "0.14.0" {
         Ok(Response::default())
     } else {
         Err(ContractError::CannotMigrate {

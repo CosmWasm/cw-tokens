@@ -403,6 +403,7 @@ dependencies = [
  "cw20-base",
  "hex 0.4.3",
  "ripemd",
+ "semver",
  "serde",
  "sha2 0.9.9",
  "thiserror",
