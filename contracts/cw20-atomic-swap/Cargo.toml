@@ -1,6 +1,6 @@
 [package]
 name = "cw20-atomic-swap"
-version = "0.14.1"
+version = "0.14.2"
 authors = ["Mauro Lacy <maurolacy@users.noreply.github.com>"]
 edition = "2018"
 description = "Implementation of Atomic Swaps"
