@@ -31,9 +31,9 @@ class Airdrop {
     proof.forEach((proofElem) => {
       const proofBuf = Buffer.from(proofElem, 'hex');
       if (hashBuf < proofBuf) {
-        hashBuf = Buffer.from(sha256(Buffer.concat([hashBuf, proofBuf]).toString()));
+        hashBuf = Buffer.from(sha256(Buffer.concat([hashBuf, proofBuf])).toString());
       } else {
-        hashBuf = Buffer.from(sha256(Buffer.concat([proofBuf, hashBuf]).toString()));
+        hashBuf = Buffer.from(sha256(Buffer.concat([proofBuf, hashBuf])).toString());
       }
     });
 
